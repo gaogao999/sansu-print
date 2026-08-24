@@ -117,6 +117,9 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   border:1.5px solid var(--accent);transition:transform .08s;
 }
 .acts button:active{transform:translateY(1px)}
+.acts button small{display:block;font-size:10.5px;font-weight:400;color:var(--ink2);
+  margin-top:1px;letter-spacing:0}
+.acts .btn-print small{color:rgba(255,255,255,.75)}
 .btn-print{background:var(--accent);color:var(--card)}
 .btn-new{background:transparent;color:var(--accent)}
 .acts .no{
@@ -431,7 +434,10 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <p class="warn" id="warn" hidden></p>
 
   <div class="acts">
-    <button type="button" class="btn-new" id="regen">べつの問題に する</button>
+    <button type="button" class="btn-new" id="random">ランダムに 作る
+      <small>たんげんも おまかせで えらぶ</small></button>
+    <button type="button" class="btn-new" id="regen">べつの問題に する
+      <small>いまの せっていの まま</small></button>
     <button type="button" class="btn-print" id="print">A4で 印刷する</button>
     <div class="no"><span>プリント No.</span><b id="seed">0000</b></div>
   </div>
@@ -1369,7 +1375,7 @@ var state = {
   grades:[4], cats:["calc","fig","word"], units:["int"], lang:"ja",
   type:"hissan", ops:["/"], da:3, db:2, nocarry:false, divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
-  count:12, cols:"auto", mixmode:false,
+  count:12, cols:"auto", mixmode:false, countAuto:true,
   title:"", titleDirty:false, namerow:true, withans:true,
   seed:Math.floor(Math.random()*9000)+1000
 };
@@ -1681,12 +1687,20 @@ function render(depth){
   fitTitles();
   fit();
   if(sheet!=="masu"){
-    var cap = layoutSheets(sheet,cols);
-    if(cap && st.count > cap && !(depth>3)){
-      var fitted = fitCount(cap);
+    var fitres = layoutSheets(sheet,cols), d = depth||0;
+    if(fitres.cap && st.count > fitres.cap && d<4){
+      var fitted = fitCount(fitres.cap);
       if(fitted < st.count){
         st.count = fitted; fillCount(); trimmed = true;
-        return render((depth||0)+1);
+        return render(d+1);
+      }
+    }
+    /* 数を 自分で えらんでいない ときは、用紙が うまるまで ふやす */
+    if(st.countAuto && !trimmed && fitres.room >= cols && !short && d<4){
+      var grown = fitCount(st.count + fitres.room);
+      if(grown > st.count){
+        st.count = grown; fillCount();
+        return render(d+1);
       }
     }
   }
@@ -1701,7 +1715,7 @@ function render(depth){
 }
 /* 用紙に 合わせて 行間を そろえる。はみ出す ときは 入る数を かえす */
 function layoutSheets(sheet,cols){
-  var papers = document.querySelectorAll(".paper"), capacity = 0;
+  var papers = document.querySelectorAll(".paper"), capacity = 0, room = Infinity;
   var capPx = (sheet==="hissan" ? 12 : sheet==="block" ? 14 : 20) * MM;
   for(var p=0;p<papers.length;p++){
     var body = papers[p].querySelector(".body");
@@ -1722,6 +1736,7 @@ function layoutSheets(sheet,cols){
       for(i=0;i<n;i++)
         if(items[i].offsetTop - top0 + items[i].offsetHeight > usable + 0.5) break;
       capacity = Math.max(cols, Math.floor(i/cols)*cols);
+      room = 0;
       break;
     }
     var rows = Math.ceil(n/cols);
@@ -1731,11 +1746,13 @@ function layoutSheets(sheet,cols){
       bottom = rows*cellH + (rows-1)*gap;
     }
     var left = usable - bottom;
+    /* いちばん つまっている 紙に あわせて、あと 何問 入るかを 見る */
+    room = Math.min(room, Math.floor((left + gap)/(ih + gap)) * cols);
     grid.style.height = "100%";
     grid.style.alignContent = "center";
     grid.style.rowGap = (rows>1 ? Math.min(gap + left/(rows-1), capPx) : gap) + "px";
   }
-  return capacity;
+  return {cap:capacity, room: room===Infinity ? 0 : Math.max(0,room)};
 }
 /* だいめいが 1行に 入るまで 字を 小さくする */
 function fitTitles(){
@@ -1869,7 +1886,7 @@ function load(){
     if(!raw) return;
     var o = JSON.parse(raw);
     ["lang","type","da","db","nocarry","divmode","dp","fd","paren","negparen","eqform",
-     "count","cols","mixmode","title","titleDirty","namerow","withans"].forEach(function(k){
+     "count","cols","mixmode","countAuto","title","titleDirty","namerow","withans"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
     ["grades","cats","units","ops"].forEach(function(k){
@@ -1894,6 +1911,19 @@ function applyToForm(){
   if(dm) dm.checked = true;
 }
 function update(){ syncUI(); save(); render(); }
+/* えらんだ 学年・ぶんやの 中から、たんげんを おまかせで えらび直す */
+function randomSheet(){
+  var vis = visibleUnits();
+  if(!vis.length) return;
+  var pool = vis.slice(), n = Math.min(pool.length, 2 + Math.floor(Math.random()*4)), out = [];
+  while(out.length < n) out.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0].id);
+  state.units = out;
+  state.mixmode = out.length > 1;
+  state.countAuto = true;
+  state.seed = Math.floor(Math.random()*9000)+1000;
+  state.titleDirty = false;
+  update();
+}
 function toggle(arr,v,keepOne){
   var i = arr.indexOf(v);
   if(i>=0){ if(!keepOne || arr.length>1) arr.splice(i,1); }
@@ -1972,7 +2002,9 @@ document.addEventListener("DOMContentLoaded", function(){
     r.addEventListener("change",function(){ state.divmode = this.value; update(); });
   });
   document.getElementById("count").addEventListener("change",function(){
-    state.count = Number(this.value); save(); render();
+    state.count = Number(this.value);
+    state.countAuto = false;                       /* 自分で えらんだ 数は そのまま つかう */
+    save(); render();
   });
   document.getElementById("cols").addEventListener("change",function(){
     state.cols = this.value; save(); render();
@@ -1982,6 +2014,7 @@ document.addEventListener("DOMContentLoaded", function(){
     state.titleDirty = this.value.trim() !== "";
     save(); render();
   });
+  document.getElementById("random").addEventListener("click", randomSheet);
   document.getElementById("regen").addEventListener("click",function(){
     state.seed = Math.floor(Math.random()*9000)+1000; render();
   });
