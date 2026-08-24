@@ -8,7 +8,8 @@
 <title>算数プリントメーカー</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link id="gf" rel="stylesheet" media="print"
+      href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
 :root{
   --desk:#EDF0F3; --desk2:#E2E7EC; --card:#FFFFFF; --line:#CFD8E1;
@@ -590,6 +591,7 @@ function genDiv(rand,da,db,mode){
 }
 function uInt(rand,o){
   var op = pick(rand,o.ops), p, ans, rem = 0;
+  if((op==="-"||op==="/") && o.da < o.db) o.da = o.db;   /* けたが 逆だと 作れないので そろえる */
   if(op==="+"){ p = genAdd(rand,o.da,o.db,o.nocarry); if(!p) return null; ans = p[0]+p[1]; }
   else if(op==="-"){ p = genSub(rand,o.da,o.db,o.nocarry); if(!p) return null; ans = p[0]-p[1]; }
   else if(op==="*"){ p = [ri(rand,Math.max(2,lo(o.da)),hi(o.da)), ri(rand,Math.max(2,lo(o.db)),hi(o.db))];
@@ -606,6 +608,7 @@ function uInt(rand,o){
 /* ---------- 虫食い算（□を もとめる） ---------- */
 function uHole(rand,o){
   var op = pick(rand,o.ops), p, a, b, c;
+  if((op==="-"||op==="/") && o.da < o.db) o.da = o.db;
   if(op==="+"){ p = genAdd(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a+b; }
   else if(op==="-"){ p = genSub(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a-b; }
   else if(op==="*"){ a = ri(rand,Math.max(2,lo(o.da)),hi(o.da)); b = ri(rand,Math.max(2,lo(o.db)),hi(o.db)); c = a*b; }
@@ -703,8 +706,8 @@ function uUnit(rand,o){
   var g = o.grade, list = [
     {a:"cm",b:"mm",k:10,   g:3}, {a:"m", b:"cm",k:100,  g:3},
     {a:"km",b:"m", k:1000, g:3}, {a:"kg",b:"g", k:1000, g:3},
-    {a:"L", b:"mL",k:1000, g:4}, {a:"t", b:"kg",k:1000, g:4},
-    {a:"m²",b:"cm²",k:10000,g:5},{a:"km²",b:"m²",k:1000000,g:5},
+    {a:"L", b:"mL",k:1000, g:3}, {a:"t", b:"kg",k:1000, g:4},
+    {a:"m²",b:"cm²",k:10000,g:4},{a:"km²",b:"m²",k:1000000,g:4},
     {a:"時間",b:"分",k:60, g:3, ja:true}, {a:"分",b:"秒",k:60, g:3, ja:true}
   ].filter(function(u){ return u.g<=g; });
   var u = pick(rand,list), down = rand()<0.6;
@@ -751,7 +754,16 @@ function uHi(rand,o){
 }
 /* ---------- 文字と式 ---------- */
 function uLetter(rand,o){
-  var mode = pick(rand,[1,2,3]), a = ri(rand,2,9), b = ri(rand,2,9), x = ri(rand,2,9);
+  /* 小6は 式の値・文字で式に表す まで。同類項や 分配法則は 中1から */
+  var mode = o.grade<=6 ? cyc([1,4],o) : cyc([1,2,3,4],o);
+  var a = ri(rand,2,9), b = ri(rand,2,9), x = ri(rand,2,9);
+  if(mode===4){
+    var price = ri(rand,3,9)*10, cnt = ri(rand,2,9);
+    return {kind:"calc", long:true, key:"L4"+price+cnt,
+      ex:T("1こ x 円の おかしを "+cnt+"こ 買って、"+price+"円の ふくろに 入れます。代金を x を つかった 式で",
+           "Sweets cost x yen each. You buy "+cnt+" and pay "+price+" yen for a bag. Write the total using x"),
+      eq:"", ans: cnt+"x + "+price};
+  }
   if(mode===1){
     return {kind:"calc", long:true, key:"L1"+a+b+x,
       ex:T(a+"x + "+b+" の x に "+x+" を 入れると", "Evaluate "+a+"x + "+b+" when x = "+x),
@@ -805,9 +817,15 @@ function uEq(rand,o){
 }
 /* ---------- 比例と反比例 ---------- */
 function uProp(rand,o){
-  var a = ri(rand,2,9), x1 = ri(rand,2,9), x2 = ri(rand,2,12), inv = o.grade>=7 && rand()<0.4;
+  var a = ri(rand,2,9), x1 = ri(rand,2,9), x2 = ri(rand,2,12), inv = o.grade>=6 && rand()<0.4;
+  var guard = 0;
+  while(x2===x1 && guard++<20) x2 = ri(rand,2,12);   /* 同じ x を 2回 聞かない */
+  if(x2===x1) return null;
   if(inv){
-    var k = a*x1*2;
+    var k = a*x1*2, ds = [], d;
+    for(d=2; d<=20; d++) if(k%d===0 && d!==x1) ds.push(d);
+    if(!ds.length) return null;
+    x2 = ds[Math.floor(rand()*ds.length)];          /* わり切れる x だけ 聞く */
     return {kind:"calc", long:true, key:"P2"+k+x1+x2,
       ex:T("y は x に 反比例し、x＝"+x1+" のとき y＝"+(k/x1)+"です。x＝"+x2+" のとき y は",
            "y varies inversely with x. When x = "+x1+", y = "+(k/x1)+". Find y when x = "+x2+"."),
@@ -1536,7 +1554,7 @@ var UNITS = [
   {id:"round",   cat:"calc", g:[4],         ja:"がい数（四捨五入）",    en:"Rounding",             gen:uRound},
   {id:"divisor", cat:"calc", g:[5],         ja:"倍数と 約数",           en:"Multiples & factors",  gen:uDivisor},
   {id:"dec",     cat:"calc", g:[4,5,6,7],   ja:"小数の 計算",           en:"Decimals",             gen:uDec,   forms:["yoko","hissan"], ops:1, opts:["dec"]},
-  {id:"frac",    cat:"calc", g:[5,6,7],     ja:"分数の 計算",           en:"Fractions",            gen:uFrac,  ops:1, opts:["frac"]},
+  {id:"frac",    cat:"calc", g:[4,5,6,7],   ja:"分数の 計算",           en:"Fractions",            gen:uFrac,  ops:1, opts:["frac"]},
   {id:"unit",    cat:"calc", g:[3,4,5,6],   ja:"単位の かんさん",       en:"Unit conversion",      gen:uUnit},
   {id:"ratioc",  cat:"calc", g:[5,6],       ja:"割合・百分率",          en:"Percentages",          gen:uRatioC},
   {id:"hi",      cat:"calc", g:[6],         ja:"比",                    en:"Ratios",               gen:uHi},
@@ -1585,7 +1603,10 @@ function unitDefaults(id,grade){
   }
   if(id==="hole") o.ops = grade<=3 ? ["+","-"] : ["+","-","*","/"];
   if(id==="dec"){ o.ops = grade<5 ? ["+","-","*"] : ["+","-","*","/"]; }
-  if(id==="frac") o.ops = grade<6 ? ["+","-"] : ["+","-","*","/"];
+  if(id==="frac"){
+    o.ops = grade<6 ? ["+","-"] : ["+","-","*","/"];
+    if(grade<=4) o.fd = "same";                    /* 小4は 同じ分母だけ */
+  }
   if(id==="neg")  o.ops = ["+","-","*","/"];
   return o;
 }
@@ -1663,7 +1684,7 @@ function makeSet(st){
   for(var j=us.length-1;j>0;j--){                  /* 単元の じゅんを まぜる */
     var k = Math.floor(rand()*(j+1)), tmp = us[j]; us[j] = us[k]; us[k] = tmp;
   }
-  var out = [], seen = {}, tries = 0, cap = st.count*300, i = 0, made = {};
+  var out = [], seen = {}, tries = 0, cap = Math.min(st.count*300, 20000), i = 0, made = {};
   while(out.length<st.count && tries<cap){
     tries++;
     var u = us[i % us.length];
@@ -1804,7 +1825,7 @@ function masuHTML(m){
 }
 /* だいめい・小見出し */
 function gradeLabel(){
-  var g = state.grades.slice().sort(function(a,b){return a-b;});
+  var g = state.grades.filter(function(x){ return GRADENAME[x]; }).sort(function(a,b){return a-b;});
   if(!g.length) return "";
   var f = GRADENAME[g[0]][LANG], l = GRADENAME[g[g.length-1]][LANG];
   return g.length===1 ? f : f+T("〜","–")+l;
@@ -2108,6 +2129,34 @@ function syncUI(){
   if(!st.titleDirty) document.getElementById("title").value = autoTitle();
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); }catch(e){} }
+/* 保存データは 何が 入っているか わからないので、通る値だけ 取り出す */
+function clean(){
+  var st = state, i;
+  function pickOne(v,list,def){ return list.indexOf(v)>=0 ? v : def; }
+  function num(v,lo2,hi2,def){ v = Math.floor(Number(v)); return (isFinite(v)&&v>=lo2&&v<=hi2) ? v : def; }
+  st.grades = (Array.isArray(st.grades)?st.grades:[]).map(Number)
+    .filter(function(g){ return [3,4,5,6,7].indexOf(g)>=0; });
+  if(!st.grades.length) st.grades = [4];
+  st.cats = (Array.isArray(st.cats)?st.cats:[]).filter(function(c){
+    return CATS.some(function(x){ return x.id===c; }); });
+  if(!st.cats.length) st.cats = ["calc","fig","word"];
+  st.units = (Array.isArray(st.units)?st.units:[]).filter(function(id){ return !!unitOf(id); });
+  st.ops = (Array.isArray(st.ops)?st.ops:[]).filter(function(x){ return "+-*/".indexOf(x)>=0 && x.length===1; });
+  if(!st.ops.length) st.ops = ["+"];
+  st.lang = pickOne(st.lang,["ja","en"],"ja");
+  st.type = pickOne(st.type,["yoko","hissan","masu"],"yoko");
+  st.divmode = pickOne(st.divmode,["exact","rem"],"exact");
+  st.fd = pickOne(st.fd,["same","diff"],"diff");
+  st.eqform = pickOne(st.eqform,["any","a","b"],"any");
+  st.cols = pickOne(String(st.cols),["auto","1","2","3"],"auto");
+  st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
+  st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
+  st.seed = num(st.seed,1,99999,1234);
+  ["nocarry","paren","negparen","namerow","withans","titleDirty","mixmode","countAuto"].forEach(function(k){
+    st[k] = !!st[k];
+  });
+  st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
+}
 function load(){
   try{
     var raw = localStorage.getItem(STORE);
@@ -2121,6 +2170,7 @@ function load(){
       if(Array.isArray(o[k]) && o[k].length) state[k] = o[k];
     });
   }catch(e){}
+  clean();
 }
 function applyToForm(){
   document.getElementById("da").value = state.da;
@@ -2249,8 +2299,11 @@ document.addEventListener("DOMContentLoaded", function(){
   document.getElementById("print").addEventListener("click",function(){ window.print(); });
 
   window.addEventListener("resize", fit);
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
   update();
+  /* ここで はじめて フォントを 画面にも きかせる。届かなくても 用紙は もう 出ている */
+  var gf = document.getElementById("gf");
+  if(gf) gf.media = "all";
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ render(); });
 });
 })();
 </script>
