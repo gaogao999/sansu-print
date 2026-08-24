@@ -34,7 +34,8 @@
 
 ## 直しかた
 
-`index.html` を直接ひらいて直す。main に push すると GitHub Pages に反映される。
+`index.html` を直接ひらいて直す。`main` に push すると GitHub Pages に反映される
+（Settings → Pages のソースは **Deploy from a branch / main / (root)**。ビルドは無い）。
 
 - 見た目 … 先頭の `<style>`。用紙まわりは `.paper` 以下
 - 単元の追加 … `UNITS` に1行足し、`u◯◯(rand,o)` を書く。
