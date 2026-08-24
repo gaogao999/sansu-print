@@ -118,9 +118,6 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   border:1.5px solid var(--accent);transition:transform .08s;
 }
 .acts button:active{transform:translateY(1px)}
-.acts button small{display:block;font-size:10.5px;font-weight:400;color:var(--ink2);
-  margin-top:1px;letter-spacing:0}
-.acts .btn-print small{color:rgba(255,255,255,.75)}
 .btn-print{background:var(--accent);color:var(--card)}
 .btn-new{background:transparent;color:var(--accent)}
 .acts .no{
@@ -441,10 +438,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <p class="warn" id="warn" hidden></p>
 
   <div class="acts">
-    <button type="button" class="btn-new" id="random">ランダムに 作る
-      <small>たんげんも おまかせで えらぶ</small></button>
-    <button type="button" class="btn-new" id="regen">べつの問題に する
-      <small>いまの せっていの まま</small></button>
+    <button type="button" class="btn-new" id="regen">べつの問題に する</button>
     <button type="button" class="btn-print" id="print">A4で 印刷する</button>
     <div class="no"><span>プリント No.</span><b id="seed">0000</b></div>
   </div>
@@ -2195,19 +2189,6 @@ function applyToForm(){
   if(dm) dm.checked = true;
 }
 function update(){ syncUI(); save(); render(); }
-/* えらんだ 学年・ぶんやの 中から、たんげんを おまかせで えらび直す */
-function randomSheet(){
-  var vis = visibleUnits();
-  if(!vis.length) return;
-  var pool = vis.slice(), n = Math.min(pool.length, 2 + Math.floor(Math.random()*4)), out = [];
-  while(out.length < n) out.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0].id);
-  state.units = out;
-  state.mixmode = out.length > 1;
-  state.countAuto = true;
-  state.seed = Math.floor(Math.random()*9000)+1000;
-  state.titleDirty = false;
-  update();
-}
 function toggle(arr,v,keepOne){
   var i = arr.indexOf(v);
   if(i>=0){ if(!keepOne || arr.length>1) arr.splice(i,1); }
@@ -2298,7 +2279,6 @@ document.addEventListener("DOMContentLoaded", function(){
     state.titleDirty = this.value.trim() !== "";
     save(); render();
   });
-  document.getElementById("random").addEventListener("click", randomSheet);
   document.getElementById("regen").addEventListener("click",function(){
     state.seed = Math.floor(Math.random()*9000)+1000; render();
   });
