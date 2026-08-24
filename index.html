@@ -467,13 +467,19 @@ var CATS = [
   {id:"word", ja:"文章題", en:"Word problems"}
 ];
 var NAMES = {
-  ja:["ひろとさん","あおいさん","はるとさん","ゆいさん","そうたさん","さくらさん","りくさん","めいさん"],
-  en:["Emma","Liam","Noah","Olivia","Mia","Ethan","Ava","Lucas"]
+  ja:["ひろとさん","あおいさん","はるとさん","ゆいさん","そうたさん","さくらさん","りくさん","めいさん",
+      "かえでさん","しょうさん","みなとさん","いつきさん","ひなたさん","あかりさん"],
+  en:["Emma","Liam","Noah","Olivia","Mia","Ethan","Ava","Lucas",
+      "Sofia","Kai","Nora","Leo","Iris","Ryan"]
 };
 /* もの と 数えかた（日本語は 助数詞つき） */
 var THINGS = {
-  ja:[["えんぴつ","本"],["みかん","こ"],["シール","まい"],["ビー玉","こ"],["クッキー","まい"],["おり紙","まい"],["あめ","こ"]],
-  en:[["pencils",""],["oranges",""],["stickers",""],["marbles",""],["cookies",""],["sheets of origami",""],["candies",""]]
+  ja:[["えんぴつ","本"],["みかん","こ"],["シール","まい"],["ビー玉","こ"],["クッキー","まい"],
+      ["おり紙","まい"],["あめ","こ"],["ノート","さつ"],["たまご","こ"],["りんご","こ"],
+      ["カード","まい"],["くり","こ"],["ボール","こ"],["絵本","さつ"]],
+  en:[["pencils",""],["oranges",""],["stickers",""],["marbles",""],["cookies",""],
+      ["sheets of origami",""],["candies",""],["notebooks",""],["eggs",""],["apples",""],
+      ["cards",""],["chestnuts",""],["balls",""],["picture books",""]]
 };
 
 /* ---------- かずの もと ---------- */
@@ -597,6 +603,19 @@ function uInt(rand,o){
        sans:String(ans), rem:rem, mulrows:String(p[1]).length}
   };
 }
+/* ---------- 虫食い算（□を もとめる） ---------- */
+function uHole(rand,o){
+  var op = pick(rand,o.ops), p, a, b, c;
+  if(op==="+"){ p = genAdd(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a+b; }
+  else if(op==="-"){ p = genSub(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a-b; }
+  else if(op==="*"){ a = ri(rand,Math.max(2,lo(o.da)),hi(o.da)); b = ri(rand,Math.max(2,lo(o.db)),hi(o.db)); c = a*b; }
+  else { p = genDiv(rand,o.da,o.db,"exact"); if(!p) return null; a=p[0]; b=p[1]; c=p[2]; }
+  var left = (((o.n||0)+(o.off||0)) % 2) === 0;     /* □ を 左と右に かわりばんこで 置く */
+  return {kind:"calc", key:"H"+op+a+"_"+b+(left?"L":"R"),
+    ex: (left ? "□" : a) + " " + sign(op) + " " + (left ? b : "□") + " " + eqs() + " " + c,
+    eq: "□ " + eqs(), ans: String(left ? a : b)};
+}
+
 /* ---------- 小数 ---------- */
 function uDec(rand,o){
   var op = pick(rand,o.ops), p = o.dp, A,B,pa,pb,pans,ansN,sa,sb,sans;
@@ -854,25 +873,46 @@ function uCircle3(rand,o){
     ans: (toD ? r*2 : r)+" cm"};
 }
 /* 長方形・正方形（まわりの長さ・面積） */
-function rectSVG(w,h){
+function rectSVG(w,h,unk){
   var d = fitBox(w,h,84,54,28,22), x = 74-d.w/2, y = 44-d.h/2;
   return svg(140,94,
       '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+d.w+'" height="'+d.h+'"/>'
-    + tx(74, (y+d.h+10).toFixed(1), w+" cm","middle",9)
-    + tx((x-3).toFixed(1), (y+d.h/2+3).toFixed(1), h+" cm","end",9));
+    + tx(74, (y+d.h+10).toFixed(1), (unk==="w"||unk==="both") ? "?" : w+" cm","middle",
+         (unk==="w"||unk==="both")?11:9)
+    + tx((x-3).toFixed(1), (y+d.h/2+3).toFixed(1), (unk==="h"||unk==="both") ? "?" : h+" cm","end",
+         (unk==="h"||unk==="both")?11:9));
 }
 function uPerim(rand,o){
-  var w = ri(rand,3,18), h = ri(rand,3,14), sq = rand()<0.3;
+  var w = ri(rand,3,18), h = ri(rand,3,14), sq = rand()<0.3, k = cyc(["perim","side"],o);
   if(sq) h = w;
-  return {kind:"fig", key:"pm"+w+"_"+h, fig:rectSVG(w,h),
+  if(k==="side" && !sq){                            /* まわりの長さ と たて → よこ */
+    return {kind:"fig", tid:"perim_side", key:"pms"+w+"_"+h, fig:rectSVG(w,h,"w"),
+      q: ask("まわりの 長さが "+(2*(w+h))+"cm、たてが "+h+"cm の 長方形です。よこは 何cmですか。",
+             "A rectangle has a perimeter of "+(2*(w+h))+" cm and a height of "+h+" cm. How wide is it?"),
+      ans: w+" cm"};
+  }
+  return {kind:"fig", tid:"perim", key:"pm"+w+"_"+h, fig:rectSVG(w,h),
     q: ask((sq?"1辺が "+w+"cm の 正方形":"たて "+h+"cm、よこ "+w+"cm の 長方形")+"の まわりの 長さは 何cmですか。",
            (sq?"A square with sides of "+w+" cm.":"A rectangle "+w+" cm by "+h+" cm.")+" What is its perimeter?"),
     ans: (2*(w+h))+" cm"};
 }
 function uARect(rand,o){
-  var w = ri(rand,3,20), h = ri(rand,3,15), sq = rand()<0.3;
+  var w = ri(rand,3,20), h = ri(rand,3,15), k = cyc(["area","side","square"],o);
+  if(k==="square"){                                 /* 面積 → 正方形の 1辺 */
+    return {kind:"fig", tid:"rect_square", key:"arq"+w, fig:rectSVG(w,w,"both"),
+      q: ask("面積が "+(w*w)+u2()+" の 正方形です。1辺の 長さは 何cmですか。",
+             "A square has an area of "+(w*w)+" cm². How long is each side?"),
+      ans: w+" cm"};
+  }
+  if(k==="side"){                                   /* 面積 と たて → よこ */
+    return {kind:"fig", tid:"rect_side", key:"ars"+w+"_"+h, fig:rectSVG(w,h,"w"),
+      q: ask("面積が "+(w*h)+u2()+"、たてが "+h+"cm の 長方形です。よこは 何cmですか。",
+             "A rectangle has an area of "+(w*h)+" cm² and a height of "+h+" cm. How wide is it?"),
+      ans: w+" cm"};
+  }
+  var sq = rand()<0.3;
   if(sq) h = w;
-  return {kind:"fig", key:"ar"+w+"_"+h, fig:rectSVG(w,h),
+  return {kind:"fig", tid:"rect_area", key:"ar"+w+"_"+h, fig:rectSVG(w,h),
     q: ask((sq?"1辺が "+w+"cm の 正方形":"たて "+h+"cm、よこ "+w+"cm の 長方形")+"の 面積は 何"+u2()+"ですか。",
            (sq?"A square with sides of "+w+" cm.":"A rectangle "+w+" cm by "+h+" cm.")+" What is its area?"),
     ans: (w*h)+" "+u2()};
@@ -908,11 +948,36 @@ function uAngle4(rand,o){
 }
 /* 三角形・四角形の 面積（小5） */
 function uATri(rand,o){
-  var kind = pick(rand,[1,2,3,4]), b,h,a2,p,q2,f,ja,en,ans,d,x,y;
+  var kind = cyc([1,2,3,4,5,6],o), b,h,a2,p,q2,f,ja,en,ans,d,x,y,S;
+  if(kind===5){                                     /* 面積 と そこへん → 高さ（三角形） */
+    b = ri(rand,4,16); h = 2*ri(rand,2,7); S = b*h/2;
+    d = fitBox(b,h,84,52,30,22); x = 74-d.w/2; y = 44-d.h/2;
+    var ax5 = x+d.w*0.6;
+    f = svg(140,94, '<path d="M'+x+' '+(y+d.h)+' H'+(x+d.w)+' L'+ax5.toFixed(1)+' '+y+' Z"/>'
+      + dash("M"+ax5.toFixed(1)+" "+y+" V"+(y+d.h))
+      + tx(74,(y+d.h+10).toFixed(1), b+" cm","middle",9)
+      + tx((ax5+4).toFixed(1),(y+d.h/2).toFixed(1), "?","start",11));
+    return {kind:"fig", tid:"tri_h", key:"ath"+b+"_"+h, fig:f,
+      q: ask("面積が "+S+u2()+"、そこへんが "+b+"cm の 三角形です。高さは 何cmですか。",
+             "A triangle has an area of "+S+" cm² and a base of "+b+" cm. What is its height?"),
+      ans: h+" cm"};
+  }
+  if(kind===6){                                     /* 面積 と そこへん → 高さ（平行四辺形） */
+    b = ri(rand,4,16); h = ri(rand,3,12); S = b*h;
+    d = fitBox(b,h,72,52,30,22); x = 66-d.w/2; y = 44-d.h/2;
+    f = svg(140,94, '<path d="M'+x+' '+(y+d.h)+' H'+(x+d.w)+' L'+(x+d.w+16)+' '+y+' H'+(x+16)+' Z"/>'
+      + dash("M"+(x+d.w)+" "+(y+d.h)+" V"+y)
+      + tx((x+d.w/2).toFixed(1),(y+d.h+10).toFixed(1), b+" cm","middle",9)
+      + tx((x+d.w-3).toFixed(1),(y+d.h/2).toFixed(1), "?","end",11));
+    return {kind:"fig", tid:"para_h", key:"aph"+b+"_"+h, fig:f,
+      q: ask("面積が "+S+u2()+"、そこへんが "+b+"cm の 平行四辺形です。高さは 何cmですか。",
+             "A parallelogram has an area of "+S+" cm² and a base of "+b+" cm. What is its height?"),
+      ans: h+" cm"};
+  }
   if(kind===1){
     b = ri(rand,4,16); h = ri(rand,3,12);
     d = fitBox(b,h,84,52,30,22); x = 74-d.w/2; y = 44-d.h/2;
-    var ax = x+d.w*0.68;
+    var ax = x+d.w*pick(rand,[0.25,0.5,0.68]);
     f = svg(140,94, '<path d="M'+x+' '+(y+d.h)+' H'+(x+d.w)+' L'+ax.toFixed(1)+' '+y+' Z"/>'
       + dash("M"+ax.toFixed(1)+" "+y+" V"+(y+d.h))
       + '<path d="M'+ax.toFixed(1)+' '+(y+d.h-7)+' h7 v7" stroke-width="1"/>'
@@ -955,7 +1020,8 @@ function uATri(rand,o){
     en = "A rhombus with diagonals "+p+" cm and "+q2+" cm. Find its area.";
     ans = num1(p*q2/2)+" "+u2();
   }
-  return {kind:"fig", key:"at"+kind+(b||p)+"_"+(h||q2)+"_"+(a2||0), fig:f, q:ask(ja,en), ans:ans};
+  return {kind:"fig", tid:"at"+kind, key:"at"+kind+(b||p)+"_"+(h||q2)+"_"+(a2||0),
+    fig:f, q:ask(ja,en), ans:ans};
 }
 /* 三角形・四角形の 角（小5） */
 function uAngle5(rand,o){
@@ -992,14 +1058,26 @@ function circleSVG(r,useD){
 }
 function uCircum(rand,o){
   var r = ri(rand,2,12), useD = rand()<0.5;
-  return {kind:"fig", key:"cc"+r+useD, fig:circleSVG(r,useD),
+  if(cyc(["circum","diameter"],o)==="diameter"){    /* まわりの長さ → 直径 */
+    return {kind:"fig", tid:"circum_d", key:"ccd"+r, fig:circleSVG(r,true),
+      q: ask("まわりの 長さが "+num1(Math.round(r*2*PI*100)/100)+"cm の 円の 直径は 何cmですか。（3.14）",
+             "A circle has a circumference of "+num1(Math.round(r*2*PI*100)/100)+" cm. What is its diameter? (π = 3.14)"),
+      ans: (r*2)+" cm"};
+  }
+  return {kind:"fig", tid:"circum", key:"cc"+r+useD, fig:circleSVG(r,useD),
     q: ask((useD?"直径 "+(r*2):"半径 "+r)+"cm の 円の まわりの 長さは。（円しゅうりつ 3.14）",
            "Find the circumference of a circle with "+(useD?"diameter "+(r*2):"radius "+r)+" cm. (π = 3.14)"),
     ans: num1(Math.round(r*2*PI*100)/100)+" cm"};
 }
 function uACirc(rand,o){
   var r = ri(rand,2,12);
-  return {kind:"fig", key:"ac"+r, fig:circleSVG(r,false),
+  if(cyc(["area","radius"],o)==="radius"){          /* 面積 → 半径 */
+    return {kind:"fig", tid:"acirc_r", key:"acr"+r, fig:circleSVG(r,false),
+      q: ask("面積が "+num1(Math.round(r*r*PI*100)/100)+u2()+" の 円の 半径は 何cmですか。（3.14）",
+             "A circle has an area of "+num1(Math.round(r*r*PI*100)/100)+" cm². What is its radius? (π = 3.14)"),
+      ans: r+" cm"};
+  }
+  return {kind:"fig", tid:"acirc", key:"ac"+r, fig:circleSVG(r,false),
     q: ask("半径 "+r+"cm の 円の 面積は。（円しゅうりつ 3.14）",
            "Find the area of a circle with radius "+r+" cm. (π = 3.14)"),
     ans: num1(Math.round(r*r*PI*100)/100)+" "+u2()};
@@ -1011,12 +1089,19 @@ function boxSVG(a,b,c){
     + '<path d="M46 36 L68 20 H134 L112 36"/><path d="M134 20 V64 L112 80"/>'
     + dash("M68 20 V64 H134") + dash("M68 64 L46 80")
     + tx(79,92, a+" cm","middle",9)
-    + tx(43,61, c+" cm","end",9)
+    + tx(43,61, c==="?" ? "?" : c+" cm","end", c==="?" ? 11 : 9)
     + tx(100,32, b+" cm","middle",8));
 }
 function uVol5(rand,o){
   var cube = rand()<0.3, a = ri(rand,2,12), b = cube?a:ri(rand,2,10), c = cube?a:ri(rand,2,10);
-  return {kind:"fig", key:"v5"+a+"_"+b+"_"+c, fig:boxSVG(a,b,c),
+  if(cyc(["vol","height"],o)==="height"){           /* 体積 と 底面 → 高さ */
+    cube = false; a = ri(rand,2,10); b = ri(rand,2,10); c = ri(rand,2,10);
+    return {kind:"fig", tid:"vol5_h", key:"v5h"+a+"_"+b+"_"+c, fig:boxSVG(a,b,"?"),
+      q: ask("よこ "+a+"cm、たて "+b+"cm の 直方体の 体積が "+(a*b*c)+u3()+" です。高さは 何cmですか。",
+             "A box is "+a+" cm by "+b+" cm and has a volume of "+(a*b*c)+" cm³. What is its height?"),
+      ans: c+" cm"};
+  }
+  return {kind:"fig", tid:"vol5", key:"v5"+a+"_"+b+"_"+c, fig:boxSVG(a,b,c),
     q: ask(cube ? "1辺が "+a+"cm の 立方体の 体積は 何"+u3()+"ですか。"
                 : "よこ "+a+"cm、たて "+b+"cm、高さ "+c+"cm の 直方体の 体積は。",
            cube ? "Find the volume of a cube with edges of "+a+" cm."
@@ -1105,204 +1190,339 @@ function uVol7(rand,o){
 }
 
 /* ==========================================================
-   文章題
+   文章題（単元ごとに 4〜6の 型を 順ぐりに 出す）
    ========================================================== */
-function W(key,q,ans,shiki){ return {kind:"word", key:key, q:q, ans:ans, shiki:shiki!==false}; }
+function W(tid,key,q,ans,shiki){
+  return {kind:"word", tid:tid, key:key, q:q, ans:ans, shiki:shiki!==false};
+}
+/* 型は 順ぐりに つかう。1まいの 中で 同じ言い回しが つづかない */
+function cyc(list,o){ return list[(((o.n||0)+(o.off||0)) % list.length + list.length) % list.length]; }
 
-/* 四則の文章題（小3・小4） */
+/* 四則の文章題（小3・小4）。小4からは 2だんかいの 問題も 出す */
 function uWArith(rand,o){
-  var n = nm(rand), t = thing(rand), mode = pick(rand, o.grade>=4 ? [1,2,3,4,5,6] : [1,2,3,4,5]);
-  var a,b,ans;
-  if(mode===1){                                   /* あわせて */
-    a = ri(rand,12,80); b = ri(rand,12,80); ans = a+b;
-    return W("w1"+a+b,
+  var n = nm(rand), t = thing(rand), t2 = thing(rand);
+  var types = ["awase","morau","nokori","chigai","bai","toubun","amari","oturi"];
+  if(o.grade>=4) types = types.concat(["ni_kai","ni_nokori"]);
+  var k = cyc(types,o), a, b, c;
+  if(k==="awase"){
+    a = ri(rand,12,80); b = ri(rand,12,80);
+    return W(k,"w"+k+a+b,
+      ask("赤い "+t.n+"が "+ct(a,t.c)+"、青い "+t.n+"が "+ct(b,t.c)+" あります。あわせて 何"+(t.c||"こ")+" ありますか。",
+          "There are "+a+" red "+t.n+" and "+b+" blue "+t.n+". How many are there altogether?"),
+      ct(a+b,t.c));
+  }
+  if(k==="morau"){
+    a = ri(rand,12,80); b = ri(rand,12,60);
+    return W(k,"w"+k+a+b,
       ask(n+"は "+t.n+"を "+ct(a,t.c)+" もっています。おねえさんから "+ct(b,t.c)+" もらいました。ぜんぶで 何"+(t.c||"こ")+"に なりますか。",
           n+" has "+a+" "+t.n+" and gets "+b+" more. How many "+t.n+" are there in all?"),
-      ct(ans,t.c));
+      ct(a+b,t.c));
   }
-  if(mode===2){                                   /* のこりは */
-    a = ri(rand,40,120); b = ri(rand,10,39); ans = a-b;
-    return W("w2"+a+b,
+  if(k==="nokori"){
+    a = ri(rand,40,120); b = ri(rand,10,39);
+    return W(k,"w"+k+a+b,
       ask(t.n+"が "+ct(a,t.c)+" あります。"+ct(b,t.c)+" つかいました。のこりは 何"+(t.c||"こ")+"ですか。",
           "There are "+a+" "+t.n+". "+b+" are used. How many are left?"),
-      ct(ans,t.c));
+      ct(a-b,t.c));
   }
-  if(mode===3){                                   /* 何倍 */
-    a = ri(rand,3,9); b = ri(rand,4,12); ans = a*b;
-    return W("w3"+a+b,
+  if(k==="chigai"){
+    a = ri(rand,30,99); b = ri(rand,10,29);
+    return W(k,"w"+k+a+b,
+      ask(n+"は "+t.n+"を "+ct(a,t.c)+"、弟は "+ct(b,t.c)+" もっています。ちがいは 何"+(t.c||"こ")+"ですか。",
+          n+" has "+a+" "+t.n+" and their brother has "+b+". How many more does "+n+" have?"),
+      ct(a-b,t.c));
+  }
+  if(k==="bai"){
+    a = ri(rand,3,9); b = ri(rand,4,12);
+    return W(k,"w"+k+a+b,
       ask("1はこに "+t.n+"が "+ct(b,t.c)+" 入っています。"+a+"はこでは 何"+(t.c||"こ")+"に なりますか。",
           "Each box holds "+b+" "+t.n+". How many "+t.n+" are in "+a+" boxes?"),
-      ct(ans,t.c));
+      ct(a*b,t.c));
   }
-  if(mode===4){                                   /* 等分 */
-    b = ri(rand,3,9); ans = ri(rand,3,12); a = b*ans;
-    return W("w4"+a+b,
+  if(k==="toubun"){
+    b = ri(rand,3,9); c = ri(rand,3,12); a = b*c;
+    return W(k,"w"+k+a+b,
       ask(t.n+"が "+ct(a,t.c)+" あります。"+b+"人で 同じ数ずつ 分けると、1人分は 何"+(t.c||"こ")+"ですか。",
           "There are "+a+" "+t.n+" shared equally among "+b+" children. How many does each child get?"),
-      ct(ans,t.c));
+      ct(c,t.c));
   }
-  if(mode===5){                                   /* あまり */
-    b = ri(rand,3,9); var q = ri(rand,3,12), r = ri(rand,1,b-1); a = b*q+r;
-    return W("w5"+a+b,
+  if(k==="amari"){
+    b = ri(rand,3,9); c = ri(rand,3,12);
+    var r = ri(rand,1,b-1); a = b*c+r;
+    return W(k,"w"+k+a+b,
       ask(t.n+"が "+ct(a,t.c)+" あります。1ふくろに "+ct(b,t.c)+"ずつ 入れると、何ふくろ できて 何"+(t.c||"こ")+" あまりますか。",
           "There are "+a+" "+t.n+". If "+b+" go in each bag, how many bags can be filled and how many are left over?"),
-      ask(q+"ふくろ できて "+ct(r,t.c)+" あまる", q+" bags, "+r+" left over"));
+      ask(c+"ふくろ できて "+ct(r,t.c)+" あまる", c+" bags, "+r+" left over"));
   }
-  var price = ri(rand,3,9)*10, cnt = ri(rand,3,9), pay = ri(rand,5,10)*100;
-  return W("w6"+price+cnt,
-    ask("1本 "+price+"円の "+t.n+"を "+cnt+"本 買って、"+pay+"円 出しました。おつりは 何円ですか。",
-        "Each item costs "+price+" yen. You buy "+cnt+" of them and pay with "+pay+" yen. How much change do you get?"),
-    ask((pay-price*cnt)+"円", (pay-price*cnt)+" yen"));
+  if(k==="oturi"){
+    a = ri(rand,3,9)*10; b = ri(rand,3,9); c = ri(rand,5,10)*100;
+    return W(k,"w"+k+a+b,
+      ask("1本 "+a+"円の "+t.n+"を "+b+"本 買って、"+c+"円 出しました。おつりは 何円ですか。",
+          "One costs "+a+" yen. You buy "+b+" of them and pay with "+c+" yen. How much change do you get?"),
+      ask((c-a*b)+"円", (c-a*b)+" yen"));
+  }
+  if(k==="ni_kai"){                                  /* 2だんかい：×と＋ */
+    a = ri(rand,4,9)*10; b = ri(rand,2,6); c = ri(rand,4,9)*10;
+    return W(k,"w"+k+a+b+c,
+      ask("1こ "+a+"円の "+t.n+"を "+b+"こ と、"+c+"円の "+t2.n+"を 1つ 買います。代金は あわせて 何円ですか。",
+          "You buy "+b+" items at "+a+" yen each and one item for "+c+" yen. What is the total?"),
+      ask((a*b+c)+"円", (a*b+c)+" yen"));
+  }
+  /* 2だんかい：全体から 配った ぶんを ひく */
+  a = ri(rand,60,150); b = ri(rand,3,8); c = ri(rand,3,9);
+  if(b*c>=a) a = b*c + ri(rand,5,40);
+  return W("ni_nokori","wni2"+a+b+c,
+    ask(t.n+"が "+ct(a,t.c)+" あります。"+b+"人に "+ct(c,t.c)+"ずつ 配ると、のこりは 何"+(t.c||"こ")+"ですか。",
+        "There are "+a+" "+t.n+". Each of "+b+" children gets "+c+". How many are left?"),
+    ct(a-b*c,t.c));
 }
 /* 時こくと時間（小3） */
 function uWTime(rand,o){
-  var h = ri(rand,1,11), m = ri(rand,0,11)*5, add = ri(rand,3,11)*5, mode = pick(rand,[1,2]);
-  function hm(H,M){ return LANG==="ja" ? H+"時"+(M===0?"":M+"分") : H+":"+(M<10?"0"+M:M); }
-  var tot = h*60+m+add, H2 = Math.floor(tot/60)%12 || 12, M2 = tot%60;
-  if(mode===1){
-    return W("t1"+h+m+add,
-      ask("いま "+hm(h,m)+"です。"+add+"分 たつと 何時何分ですか。",
-          "It is "+hm(h,m)+". What time will it be "+add+" minutes later?"),
-      hm(H2,M2));
-  }
-  return W("t2"+h+m+add,
-    ask(hm(h,m)+" から "+hm(H2,M2)+" までは 何分間ですか。",
-        "How many minutes are there from "+hm(h,m)+" to "+hm(H2,M2)+"?"),
-    ask(add+"分間", add+" minutes"));
+  function hm(H,M){ H=((H-1)%12+12)%12+1; return LANG==="ja" ? H+"時"+(M===0?"":M+"分") : H+":"+(M<10?"0"+M:M); }
+  var h = ri(rand,1,11), m = ri(rand,0,11)*5, d = ri(rand,3,11)*5;
+  var t0 = h*60+m, t1 = t0+d;
+  var k = cyc(["ato","aida","tsuku","mae"],o);
+  if(k==="ato") return W(k,"t"+k+t0+d,
+    ask("いま "+hm(h,m)+"です。"+d+"分 たつと 何時何分ですか。",
+        "It is "+hm(h,m)+". What time will it be "+d+" minutes later?"),
+    hm(Math.floor(t1/60), t1%60));
+  if(k==="aida") return W(k,"t"+k+t0+d,
+    ask(hm(h,m)+" から "+hm(Math.floor(t1/60),t1%60)+" までは 何分間ですか。",
+        "How many minutes are there from "+hm(h,m)+" to "+hm(Math.floor(t1/60),t1%60)+"?"),
+    ask(d+"分間", d+" minutes"));
+  if(k==="tsuku") return W(k,"t"+k+t0+d,
+    ask(hm(h,m)+" に 家を 出て、駅まで "+d+"分 かかります。駅に つくのは 何時何分ですか。",
+        "You leave home at "+hm(h,m)+" and the walk to the station takes "+d+" minutes. What time do you arrive?"),
+    hm(Math.floor(t1/60), t1%60));
+  return W("mae","t"+"mae"+t1+d,
+    ask("いま "+hm(Math.floor(t1/60),t1%60)+"です。"+d+"分前は 何時何分でしたか。",
+        "It is "+hm(Math.floor(t1/60),t1%60)+". What time was it "+d+" minutes ago?"),
+    hm(h,m));
 }
 /* 単位量あたり（小5） */
 function uWUnit(rand,o){
-  var mode = pick(rand,[1,2]);
-  if(mode===1){
+  var k = cyc(["nedan","hanadan","nenpi","komi"],o);
+  if(k==="nedan"){
     var m = ri(rand,3,9), yen = m*ri(rand,4,12)*10;
-    return W("u1"+m+yen,
+    return W(k,"u"+k+m+yen,
       ask("リボン "+m+"m の ねだんが "+yen+"円です。1m あたり 何円ですか。",
           m+" m of ribbon costs "+yen+" yen. How much does 1 m cost?"),
       ask((yen/m)+"円", (yen/m)+" yen"));
   }
-  var a = ri(rand,20,60), b = ri(rand,2,9), tot = a*b;
-  return W("u2"+a+b,
-    ask("同じ 広さの 花だんが "+b+"つ あります。ぜんぶで "+tot+"m² のとき、1つ分の 広さは。",
-        "There are "+b+" flower beds of the same size. Together they cover "+tot+" m². What is the area of one bed?"),
-    a+" m²");
+  if(k==="hanadan"){
+    var a = ri(rand,20,60), b = ri(rand,2,9);
+    return W(k,"u"+k+a+b,
+      ask("同じ 広さの 花だんが "+b+"つ あります。ぜんぶで "+(a*b)+"m² のとき、1つ分の 広さは 何m²ですか。",
+          "There are "+b+" flower beds of the same size covering "+(a*b)+" m² in all. What is the area of one bed?"),
+      a+" m²");
+  }
+  if(k==="nenpi"){
+    var L = ri(rand,3,9), km = L*ri(rand,8,16);
+    return W(k,"u"+k+L+km,
+      ask("ガソリン "+L+"L で "+km+"km 走る車が あります。1L あたり 何km 走りますか。",
+          "A car travels "+km+" km on "+L+" L of fuel. How far does it go on 1 L?"),
+      (km/L)+" km");
+  }
+  var pa = ri(rand,4,9), na = ri(rand,5,12), pb = ri(rand,4,9), nb = ri(rand,5,12);
+  if(na*pb === nb*pa) nb += 1;
+  var aDense = na/pa > nb/pb;
+  return W("komi","u"+"komi"+pa+na+pb+nb,
+    ask("Aの部屋は "+pa+"m² に "+na+"人、Bの部屋は "+pb+"m² に "+nb+"人 います。こんでいるのは どちらですか。",
+        "Room A has "+na+" people in "+pa+" m². Room B has "+nb+" people in "+pb+" m². Which room is more crowded?"),
+    aDense ? "A" : "B");
 }
 /* 速さ（小5・小6） */
 function uWSpeed(rand,o){
-  var v = ri(rand,2,12)*5, t = ri(rand,2,6), d = v*t, mode = pick(rand,[1,2,3]);
-  if(mode===1) return W("s1"+v+t,
+  var v = ri(rand,2,12)*5, t = ri(rand,2,6), d = v*t;
+  var k = cyc(["michi","hayasa","jikan","fun","bunsoku"],o);
+  if(k==="michi") return W(k,"s"+k+v+t,
     ask("時速 "+v+"km で "+t+"時間 走ると、何km すすみますか。",
         "A car travels at "+v+" km/h for "+t+" hours. How far does it go?"), d+" km");
-  if(mode===2) return W("s2"+d+t,
-    ask(d+"km の 道のりを "+t+"時間で 走ると、速さは 時速 何km ですか。",
-        "A car covers "+d+" km in "+t+" hours. What is its speed?"), ask("時速 "+v+"km", v+" km/h"));
-  return W("s3"+d+v,
+  if(k==="hayasa") return W(k,"s"+k+d+t,
+    ask(d+"km の 道のりを "+t+"時間で 走りました。速さは 時速 何km ですか。",
+        "A car covers "+d+" km in "+t+" hours. What is its speed?"),
+    ask("時速 "+v+"km", v+" km/h"));
+  if(k==="jikan") return W(k,"s"+k+d+v,
     ask(d+"km の 道のりを 時速 "+v+"km で 走ると、何時間 かかりますか。",
-        "How long does it take to travel "+d+" km at "+v+" km/h?"), ask(t+"時間", t+" hours"));
+        "How long does it take to travel "+d+" km at "+v+" km/h?"),
+    ask(t+"時間", t+" hours"));
+  if(k==="fun"){
+    var mv = ri(rand,4,12)*10, mt = ri(rand,4,15);
+    return W(k,"s"+k+mv+mt,
+      ask("分速 "+mv+"m で "+mt+"分 歩くと、何m すすみますか。",
+          "Walking at "+mv+" m per minute for "+mt+" minutes, how far do you go?"),
+      (mv*mt)+" m");
+  }
+  var mm = ri(rand,3,15), dm = mm*ri(rand,5,12)*10;
+  return W("bunsoku","s"+"bun"+dm+mm,
+    ask(dm+"m の 道のりを "+mm+"分で 歩きました。分速 何m ですか。",
+        "You walk "+dm+" m in "+mm+" minutes. What is your speed in metres per minute?"),
+    ask("分速 "+(dm/mm)+"m", (dm/mm)+" m/min"));
 }
 /* 割合の文章題（小5・小6） */
 function uWRatio(rand,o){
-  var mode = pick(rand,[1,2,3]), base = ri(rand,2,20)*50, pct = pick(rand,[10,20,25,30,40,50,60,75,80]);
-  if(mode===1) return W("r1"+base+pct,
+  var base = ri(rand,2,20)*50, pct = pick(rand,[10,20,25,30,40,50,60,75,80]);
+  var k = cyc(["biki","nanpa","moto","mashi","kurabe"],o);
+  if(k==="biki") return W(k,"r"+k+base+pct,
     ask("定価 "+base+"円の 品物を "+pct+"% 引きで 買います。代金は 何円ですか。",
-        "An item costs "+base+" yen. It is on sale at "+pct+"% off. What is the sale price?"),
+        "An item costs "+base+" yen and is "+pct+"% off. What is the sale price?"),
     ask(num1(base*(100-pct)/100)+"円", num1(base*(100-pct)/100)+" yen"));
-  if(mode===2){
+  if(k==="nanpa"){
     var all = ri(rand,4,20)*10, part = all*pct/100;
-    return W("r2"+all+pct,
+    return W(k,"r"+k+all+pct,
       ask(all+"人の うち "+num1(part)+"人が 犬を かっています。これは ぜんたいの 何%ですか。",
           num1(part)+" out of "+all+" students have a dog. What percent is that?"),
       pct+"%");
   }
-  var n2 = ri(rand,4,20)*5;
-  return W("r3"+n2+pct,
-    ask("ある クラスの "+pct+"% が "+num1(n2*pct/100)+"人です。クラス ぜんたいは 何人ですか。",
-        pct+"% of a class is "+num1(n2*pct/100)+" students. How many students are in the class?"),
-    ask(n2+"人", String(n2)));
+  if(k==="moto"){
+    var n2 = ri(rand,4,20)*5;
+    return W(k,"r"+k+n2+pct,
+      ask("あるクラスの "+pct+"% が "+num1(n2*pct/100)+"人です。クラス ぜんたいは 何人ですか。",
+          pct+"% of a class is "+num1(n2*pct/100)+" students. How many students are in the class?"),
+      ask(n2+"人", String(n2)));
+  }
+  if(k==="mashi"){
+    var m = ri(rand,2,20)*50, up = pick(rand,[10,20,25,50]);
+    return W(k,"r"+k+m+up,
+      ask("きのうの 客は "+m+"人でした。今日は それより "+up+"% 多かったそうです。今日の 客は 何人ですか。",
+          "Yesterday "+m+" people came. Today "+up+"% more came than yesterday. How many came today?"),
+      ask(num1(m*(100+up)/100)+"人", num1(m*(100+up)/100)));
+  }
+  var big = ri(rand,4,12)*25, small = big*pick(rand,[20,25,40,50,60,80])/100;
+  return W("kurabe","r"+"kur"+big+small,
+    ask(num1(small)+"g は "+big+"g の 何倍ですか。",
+        "What fraction of "+big+" g is "+num1(small)+" g? (as a decimal)"),
+    ask(num1(small/big)+"倍", num1(small/big)));
 }
 /* 平均（小5） */
 function uWAverage(rand,o){
-  var k = pick(rand,[4,5]), v = [], sum = 0, avg = ri(rand,50,90), i;
-  for(i=0;i<k-1;i++){ var x = avg + ri(rand,-12,12); v.push(x); sum += x; }
-  v.push(avg*k - sum);
-  if(v[k-1]<0||v[k-1]>100) return null;
-  return W("av"+v.join("_"),
+  var k = cyc(["heikin","goukei","ochi"],o), i, v = [], sum = 0;
+  var cnt = pick(rand,[4,5]), avg = ri(rand,50,90);
+  for(i=0;i<cnt-1;i++){ var x = avg + ri(rand,-12,12); v.push(x); sum += x; }
+  v.push(avg*cnt - sum);
+  if(v[cnt-1]<0 || v[cnt-1]>100) return null;
+  if(k==="heikin") return W(k,"av"+v.join("_"),
     ask("テストの 点数は "+v.join("点、")+"点でした。平均は 何点ですか。",
         "Test scores were "+v.join(", ")+". What is the mean score?"),
     ask(avg+"点", String(avg)));
+  if(k==="goukei"){
+    var d = ri(rand,3,8), ave = ri(rand,20,60);
+    return W(k,"av"+"g"+d+ave,
+      ask(d+"日間の 平均が "+ave+"ページのとき、読んだ ページは あわせて 何ページですか。",
+          "Over "+d+" days the mean was "+ave+" pages a day. How many pages in total?"),
+      ask((d*ave)+"ページ", String(d*ave)));
+  }
+  var known = v.slice(0,cnt-1), last = v[cnt-1];
+  return W("ochi","av"+"o"+v.join("_"),
+    ask(cnt+"回の テストの 平均が "+avg+"点でした。はじめの "+(cnt-1)+"回は "+known.join("点、")+"点です。"
+      + "のこりの 1回は 何点ですか。",
+        "The mean of "+cnt+" tests is "+avg+". The first "+(cnt-1)+" scores are "+known.join(", ")+". What is the last score?"),
+    ask(last+"点", String(last)));
 }
 /* 分数の文章題（小6） */
 function uWFrac(rand,o){
   var d1 = ri(rand,2,8), n1 = ri(rand,1,d1-1), d2 = ri(rand,2,8), n2 = ri(rand,1,d2-1);
-  var mode = pick(rand,[1,2]);
-  if(mode===1) return W("wf1"+n1+d1+n2+d2,
+  var k = cyc(["omosa","waru","f_awase","f_nokori"],o);
+  if(k==="omosa") return W(k,"wf"+k+n1+d1+n2+d2,
     ask("1m の 重さが "+frHTML(n1,d1)+"kg の ぼうが あります。"+frHTML(n2,d2)+"m の 重さは 何kg ですか。",
-        "A bar weighs "+frHTML(n1,d1)+" kg per meter. How much does "+frHTML(n2,d2)+" m weigh?"),
+        "A bar weighs "+frHTML(n1,d1)+" kg per metre. How much does "+frHTML(n2,d2)+" m weigh?"),
     fracAnsHTML(n1*n2, d1*d2)+" kg");
-  return W("wf2"+n1+d1+n2+d2,
+  if(k==="waru") return W(k,"wf"+k+n1+d1+n2+d2,
     ask("ジュースが "+frHTML(n1,d1)+"L あります。1人に "+frHTML(n2,d2)+"L ずつ 分けると 何人分ですか。",
         "There is "+frHTML(n1,d1)+" L of juice. If each person gets "+frHTML(n2,d2)+" L, how many people can be served?"),
     fracAnsHTML(n1*d2, d1*n2)+T("人分",""));
+  if(k==="f_awase") return W(k,"wf"+k+n1+d1+n2+d2,
+    ask("赤い リボンが "+frHTML(n1,d1)+"m、青い リボンが "+frHTML(n2,d2)+"m あります。あわせて 何m ですか。",
+        "A red ribbon is "+frHTML(n1,d1)+" m and a blue ribbon is "+frHTML(n2,d2)+" m. How long are they together?"),
+    fracAnsHTML(n1*d2+n2*d1, d1*d2)+" m");
+  if(n1*d2 <= n2*d1) return null;
+  return W("f_nokori","wf"+"nok"+n1+d1+n2+d2,
+    ask("水が "+frHTML(n1,d1)+"L ありました。"+frHTML(n2,d2)+"L つかいました。のこりは 何L ですか。",
+        "There was "+frHTML(n1,d1)+" L of water and "+frHTML(n2,d2)+" L was used. How much is left?"),
+    fracAnsHTML(n1*d2-n2*d1, d1*d2)+" L");
 }
 /* 比の文章題（小6） */
 function uWHi(rand,o){
-  var a = ri(rand,1,6), b = ri(rand,1,6), k = ri(rand,2,9);
+  var a = ri(rand,1,6), b = ri(rand,1,6), k2 = ri(rand,2,9);
   if(a===b) return null;
-  var tot = (a+b)*k;
-  return W("wh"+a+b+k,
-    ask("あめが "+tot+"こ あります。姉と 妹で "+a+":"+b+" に なるように 分けると、姉は 何こですか。",
-        tot+" candies are shared in the ratio "+a+" : "+b+". How many does the first person get?"),
-    ask((a*k)+"こ", String(a*k)));
+  var k = cyc(["wakeru","kataho","kantan"],o);
+  if(k==="wakeru") return W(k,"wh"+k+a+b+k2,
+    ask("あめが "+((a+b)*k2)+"こ あります。姉と 妹で "+a+":"+b+" に なるように 分けると、姉は 何こですか。",
+        ((a+b)*k2)+" candies are shared in the ratio "+a+" : "+b+". How many does the first person get?"),
+    ask((a*k2)+"こ", String(a*k2)));
+  if(k==="kataho") return W(k,"wh"+k+a+b+k2,
+    ask("すと 油の 量の 比を "+a+":"+b+" に します。すを "+(a*k2)+"mL つかうとき、油は 何mL ですか。",
+        "Vinegar and oil are mixed in the ratio "+a+" : "+b+". If "+(a*k2)+" mL of vinegar is used, how much oil is needed?"),
+    (b*k2)+" mL");
+  return W("kantan","wh"+"kan"+a+b+k2,
+    ask("クラスの 男子は "+(a*k2)+"人、女子は "+(b*k2)+"人です。男子と 女子の 人数の 比を かんたんに しなさい。",
+        "A class has "+(a*k2)+" boys and "+(b*k2)+" girls. Write the ratio of boys to girls in simplest form."),
+    a+" : "+b);
 }
 /* 場合の数（小6） */
 function uWCase(rand,o){
-  var mode = pick(rand,[1,2,3,4]), n = ri(rand,4,8);
-  if(mode===3){
-    return W("wc3"+n,
-      ask(n+"つの チームで、どの チームとも 1回ずつ 試合を します。試合は ぜんぶで 何試合ですか。",
-          "Each of "+n+" teams plays every other team once. How many games are there in all?"),
-      ask((n*(n-1)/2)+"試合", String(n*(n-1)/2)));
-  }
-  if(mode===4){
+  var n = ri(rand,4,8), k = cyc(["narabe","erabu","sougo","coin","junban"],o);
+  if(k==="narabe") return W(k,"wc"+k+n,
+    ask(n+"まいの カード（1〜"+n+"）から 3まい えらんで ならべ、3けたの 数を 作ります。何通り できますか。",
+        "From "+n+" number cards (1 to "+n+"), 3 are chosen and arranged into a 3-digit number. How many can be made?"),
+    ask((n*(n-1)*(n-2))+"通り", String(n*(n-1)*(n-2))));
+  if(k==="erabu") return W(k,"wc"+k+n,
+    ask(n+"人の 中から 2人の 係を えらびます。えらび方は 何通り ありますか。",
+        "Two students are chosen from "+n+". How many different pairs are possible?"),
+    ask((n*(n-1)/2)+"通り", String(n*(n-1)/2)));
+  if(k==="sougo") return W(k,"wc"+k+n,
+    ask(n+"つの チームで、どの チームとも 1回ずつ 試合を します。試合は ぜんぶで 何試合ですか。",
+        "Each of "+n+" teams plays every other team once. How many games are there in all?"),
+    ask((n*(n-1)/2)+"試合", String(n*(n-1)/2)));
+  if(k==="coin"){
     var c = ri(rand,2,5);
-    return W("wc4"+c,
+    return W(k,"wc"+k+c,
       ask("コインを "+c+"回 なげます。表と うらの 出かたは 何通り ありますか。",
           "A coin is tossed "+c+" times. How many different results are possible?"),
       ask(Math.pow(2,c)+"通り", String(Math.pow(2,c))));
   }
-  if(mode===1){
-    return W("wc1"+n,
-      ask(n+"まいの カード（1〜"+n+"）から 3まい えらんで ならべ、3けたの 数を 作ります。何通り できますか。",
-          "From "+n+" number cards (1 to "+n+"), 3 are chosen and arranged to make a 3-digit number. How many can be made?"),
-      ask((n*(n-1)*(n-2))+"通り", String(n*(n-1)*(n-2))));
-  }
-  return W("wc2"+n,
-    ask(n+"人の 中から 2人の 係を えらびます。えらび方は 何通り ありますか。",
-        "Two students are chosen from "+n+". How many different pairs are possible?"),
-    ask((n*(n-1)/2)+"通り", String(n*(n-1)/2)));
+  var p = ri(rand,3,5), f = 1, i;
+  for(i=2;i<=p;i++) f *= i;
+  return W("junban","wc"+"jun"+p,
+    ask(p+"人が 1れつに ならびます。ならび方は 何通り ありますか。",
+        p+" children line up in a row. How many different orders are possible?"),
+    ask(f+"通り", String(f)));
 }
 /* 方程式の文章題（中1） */
 function uWEq(rand,o){
-  var mode = pick(rand,[1,2,3]);
-  if(mode===1){
+  var k = cyc(["daikin","kabusoku","nenrei","renzoku"],o);
+  if(k==="daikin"){
     var price = ri(rand,4,12)*10, cnt = ri(rand,3,8), basket = ri(rand,1,5)*50;
-    return W("we1"+price+cnt,
-      ask("1こ x 円の りんごを "+cnt+"こ と、"+basket+"円の かごを 買うと 代金は "+(price*cnt+basket)+"円でした。りんご 1この ねだんを 求めなさい。",
-          "You buy "+cnt+" apples at x yen each plus a basket for "+basket+" yen. The total is "+(price*cnt+basket)+" yen. Find the price of one apple."),
+    return W(k,"we"+k+price+cnt,
+      ask("1こ x 円の りんごを "+cnt+"こ と、"+basket+"円の かごを 買うと 代金は "+(price*cnt+basket)+"円でした。"
+        + "りんご 1この ねだんを 求めなさい。",
+          "You buy "+cnt+" apples at x yen each plus a basket for "+basket+" yen. The total is "+(price*cnt+basket)
+        + " yen. Find the price of one apple."),
       ask(price+"円", price+" yen"));
   }
-  if(mode===2){
-    var kid = ri(rand,3,8), each = ri(rand,3,9), left = ri(rand,2,9), short = ri(rand,1,8);
-    var total = kid*each + left;
-    return W("we2"+kid+each,
-      ask("あめを 何人かの 子どもに "+each+"こずつ 配ると "+left+"こ あまり、"+(each+1)+"こずつ 配ると "+((each+1)*kid-total)+"こ たりません。子どもの 人数を 求めなさい。",
-          "If each child gets "+each+" candies, "+left+" are left over. If each gets "+(each+1)+", we are short by "+((each+1)*kid-total)+". How many children are there?"),
+  if(k==="kabusoku"){
+    var kid = ri(rand,4,9), each = ri(rand,3,8), left = ri(rand,2,9);
+    var total = kid*each + left, tarinai = (each+1)*kid - total;
+    if(tarinai<1) return null;
+    return W(k,"we"+k+kid+each,
+      ask("あめを 何人かの 子どもに "+each+"こずつ 配ると "+left+"こ あまり、"+(each+1)+"こずつ 配ると "
+        + tarinai+"こ たりません。子どもの 人数を 求めなさい。",
+          "If each child gets "+each+" candies, "+left+" are left over. If each gets "+(each+1)+", there are "
+        + tarinai+" too few. How many children are there?"),
       ask(kid+"人", String(kid)));
   }
-  var now = ri(rand,8,14), par = now*3 + ri(rand,0,6), yrs = 4;
-  return W("we3"+now+par,
-    ask("いま 子どもは "+now+"才、親は "+par+"才です。親の 年れいが 子どもの 2倍に なるのは 何年後ですか。",
-        "A child is "+now+" and the parent is "+par+". In how many years will the parent's age be twice the child's?"),
-    ask((par-2*now)+"年後", (par-2*now)+" years"));
+  if(k==="nenrei"){
+    var now = ri(rand,8,14), par = now*3 + ri(rand,0,6);
+    return W(k,"we"+k+now+par,
+      ask("いま 子どもは "+now+"才、親は "+par+"才です。親の 年れいが 子どもの 2倍に なるのは 何年後ですか。",
+          "A child is "+now+" and the parent is "+par+". In how many years will the parent be twice as old as the child?"),
+      ask((par-2*now)+"年後", (par-2*now)+" years"));
+  }
+  var start = ri(rand,5,40);
+  return W("renzoku","we"+"ren"+start,
+    ask("れんぞくする 3つの 整数が あります。その 和が "+(3*start+3)+" のとき、いちばん 小さい 数を 求めなさい。",
+        "Three consecutive integers add up to "+(3*start+3)+". Find the smallest of them."),
+    String(start));
 }
 
 /* ==========================================================
@@ -1312,6 +1532,7 @@ var UNITS = [
   /* 計算 */
   {id:"int",     cat:"calc", g:[3,4,5,6,7], ja:"整数の 四則",           en:"Whole numbers",        gen:uInt,   forms:["yoko","hissan","masu"], ops:1, opts:["digits","carry","div"]},
   {id:"mixed",   cat:"calc", g:[4,5,6,7],   ja:"四則混合（かっこ）",    en:"Order of operations",  gen:uMixed, opts:["paren"]},
+  {id:"hole",    cat:"calc", g:[3,4,5,6],   ja:"虫食い算（□を もとめる）", en:"Missing numbers", gen:uHole, ops:1, opts:["digits"]},
   {id:"round",   cat:"calc", g:[4],         ja:"がい数（四捨五入）",    en:"Rounding",             gen:uRound},
   {id:"divisor", cat:"calc", g:[5],         ja:"倍数と 約数",           en:"Multiples & factors",  gen:uDivisor},
   {id:"dec",     cat:"calc", g:[4,5,6,7],   ja:"小数の 計算",           en:"Decimals",             gen:uDec,   forms:["yoko","hissan"], ops:1, opts:["dec"]},
@@ -1362,6 +1583,7 @@ function unitDefaults(id,grade){
     else if(grade===4){ o.ops=["*","/"]; o.da=3; o.db=2; o.divmode="rem"; }
     else { o.ops=["+","-","*","/"]; o.da=3; o.db=2; }
   }
+  if(id==="hole") o.ops = grade<=3 ? ["+","-"] : ["+","-","*","/"];
   if(id==="dec"){ o.ops = grade<5 ? ["+","-","*"] : ["+","-","*","/"]; }
   if(id==="frac") o.ops = grade<6 ? ["+","-"] : ["+","-","*","/"];
   if(id==="neg")  o.ops = ["+","-","*","/"];
@@ -1441,16 +1663,22 @@ function makeSet(st){
   for(var j=us.length-1;j>0;j--){                  /* 単元の じゅんを まぜる */
     var k = Math.floor(rand()*(j+1)), tmp = us[j]; us[j] = us[k]; us[k] = tmp;
   }
-  var out = [], seen = {}, tries = 0, cap = st.count*300, i = 0;
+  var out = [], seen = {}, tries = 0, cap = st.count*300, i = 0, made = {};
   while(out.length<st.count && tries<cap){
     tries++;
     var u = us[i % us.length];
     var gs = gradesFor(u);
     var grade = gs.length===1 ? gs[0] : gs[Math.floor(rand()*gs.length)];
     var q = null;
-    try { q = u.gen(rand, optsOf(u,grade)); } catch(e){ q = null; }
+    try {
+      var opt = optsOf(u,grade);
+      opt.n = made[u.id] || 0;                     /* この単元で 何問目か（型を 順ぐりに つかう） */
+      opt.off = (st.seed + u.id.length) % 7;
+      q = u.gen(rand, opt);
+    } catch(e){ q = null; }
     if(!q || seen[q.key]) continue;
     seen[q.key] = 1;
+    made[u.id] = (made[u.id] || 0) + 1;
     q.unit = u; q.grade = grade;
     out.push(q); i++;
   }
@@ -1480,7 +1708,7 @@ function autoCols(st,qs,sheet){
   if(sheet==="block")  return st.count<=6 ? 1 : 2;
   var s = single(), longish = false, i;
   for(i=0;i<qs.length;i++) if(String(qs[i].ex).length > 22) longish = true;
-  if(s && (s.id==="eq"||s.id==="mixed"||s.id==="prop"||s.id==="ratioc"||s.id==="round"||s.id==="divisor"||s.id==="hi"||s.id==="letter"||s.id==="unit")) return 2;
+  if(s && (s.id==="eq"||s.id==="mixed"||s.id==="prop"||s.id==="ratioc"||s.id==="round"||s.id==="divisor"||s.id==="hi"||s.id==="letter"||s.id==="unit"||s.id==="hole")) return 2;
   if(longish) return 2;
   if(s && s.id==="int") return (st.da>=3 || st.db>=3 || st.ops.indexOf("/")>=0) ? 2 : 3;
   if(s && s.id==="dec") return st.dp>=2 ? 2 : 3;
