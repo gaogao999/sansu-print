@@ -611,7 +611,7 @@ function uInt(rand,o){
     ans = p[0]*p[1]; }
   else { p = genDiv(rand,o.da,o.db,o.divmode); if(!p) return null; ans = p[2]; rem = p[3]; }
   return {
-    kind:"calc", key:"i"+op+p[0]+"_"+p[1],
+    kind:"calc", op:op, key:"i"+op+p[0]+"_"+p[1],
     ex:p[0]+" "+sign(op)+" "+p[1], eq:eqs(),
     ans: rem ? (LANG==="ja" ? ans+" あまり "+rem : ans+" r "+rem) : String(ans),
     h:{kind: op==="/" ? "div" : "col", op:op, sa:String(p[0]), sb:String(p[1]),
@@ -627,7 +627,7 @@ function uHole(rand,o){
   else if(op==="*"){ a = ri(rand,Math.max(2,lo(o.da)),hi(o.da)); b = ri(rand,Math.max(2,lo(o.db)),hi(o.db)); c = a*b; }
   else { p = genDiv(rand,o.da,o.db,"exact"); if(!p) return null; a=p[0]; b=p[1]; c=p[2]; }
   var left = (((o.n||0)+(o.off||0)) % 2) === 0;     /* □ を 左と右に かわりばんこで 置く */
-  return {kind:"calc", key:"H"+op+a+"_"+b+(left?"L":"R"),
+  return {kind:"calc", op:op, key:"H"+op+a+"_"+b+(left?"L":"R"),
     ex: (left ? "□" : a) + " " + sign(op) + " " + (left ? b : "□") + " " + eqs() + " " + c,
     eq: "□ " + eqs(), ans: String(left ? a : b)};
 }
@@ -656,7 +656,7 @@ function uDec(rand,o){
     else { pq = ri(rand,0,1); q = ri(rand, pq?11:2, pq?99:19); pd = 1; d = ri(rand,11,99); }
     sa = dfmt(q*d,pq+pd); sb = dfmt(d,pd); sans = dfmt(q,pq);
   }
-  return {kind:"calc", key:"d"+op+sa+"_"+sb, ex:sa+" "+sign(op)+" "+sb, eq:eqs(), ans:sans,
+  return {kind:"calc", op:op, key:"d"+op+sa+"_"+sb, ex:sa+" "+sign(op)+" "+sb, eq:eqs(), ans:sans,
     h:{kind:"col", op:op, sa:sa, sb:sb, sans:sans, rem:0, mulrows:1}};
 }
 /* ---------- 分数 ---------- */
@@ -674,7 +674,7 @@ function uFrac(rand,o){
     n1 = ri(rand,1,d1-1); n2 = ri(rand,1,d2-1);
     if(op==="*"){ N = n1*n2; D = d1*d2; } else { N = n1*d2; D = d1*n2; }
   }
-  return {kind:"calc", key:"f"+op+n1+"/"+d1+"_"+n2+"/"+d2,
+  return {kind:"calc", op:op, key:"f"+op+n1+"/"+d1+"_"+n2+"/"+d2,
     ex:frHTML(n1,d1)+" "+sign(op)+" "+frHTML(n2,d2), eq:eqs(), ans:fracAnsHTML(N,D)};
 }
 /* ---------- 四則混合 ---------- */
@@ -804,7 +804,7 @@ function uNeg(rand,o){
     b = ri(rand,1,12) * (rand()<0.5 ? -1 : 1);
     ans = op==="+" ? a+b : op==="-" ? a-b : a*b;
   }
-  return {kind:"calc", key:"n"+op+a+"_"+b,
+  return {kind:"calc", op:op, key:"n"+op+a+"_"+b,
     ex:sgn(a,P)+" "+MSIGN[op]+" "+sgn(b,P), eq:"=", ans:mnum(ans)};
 }
 /* ---------- 一次方程式 ---------- */
@@ -2186,7 +2186,7 @@ function saveHistory(){
     qs: lastQs.map(function(q){
       return {q: q.kind==="calc" ? q.ex : q.q, a: q.ans,
               unit: q.unit ? q.unit.id : "", unitJa: q.unit ? q.unit.ja : "",
-              grade: q.grade || 0};
+              grade: q.grade || 0, op: q.op || "", kind: q.kind || "", tid: q.tid || ""};
     })
   });
   if(h.length>40) h = h.slice(-40);
@@ -2267,7 +2267,8 @@ function bindCheck(id,key){
   document.getElementById(id).addEventListener("change",function(){ state[key] = this.checked; update(); });
 }
 
-/* ?g=4&u=int のように URL で 指定されたら そちらを 優先する */
+/* ?g=4&u=int&o=d&n=20&da=2&db=1&dm=rem のように URL で 指定できる。
+   o は 計算の えらび方（a=＋ s=－ m=× d=÷）。分析の おすすめから 飛んでくる */
 function fromURL(){
   try{
     var p = new URLSearchParams(location.search), g = Number(p.get("g")), u = p.get("u");
@@ -2280,7 +2281,15 @@ function fromURL(){
       if(state.grades.filter(function(x){ return un.g.indexOf(x)>=0; }).length===0)
         state.grades = [un.g[un.g.length-1]];
     }
-    if(g || un) state.titleDirty = false;
+    var o = p.get("o"), map = {a:"+", s:"-", m:"*", d:"/"}, ops = [];
+    if(o) String(o).split("").forEach(function(c){ if(map[c]) ops.push(map[c]); });
+    if(ops.length) state.ops = ops;
+    var n = Number(p.get("n"));  if(n>=4 && n<=60) { state.count = n; state.countAuto = false; }
+    var da = Number(p.get("da")); if(da>=1 && da<=4) state.da = da;
+    var db = Number(p.get("db")); if(db>=1 && db<=4) state.db = db;
+    var dm = p.get("dm"); if(dm==="rem" || dm==="exact") state.divmode = dm;
+    var t = p.get("t"); if(["yoko","hissan","masu"].indexOf(t)>=0) state.type = t;
+    if(g || un || o) state.titleDirty = false;
   }catch(e){}
 }
 document.addEventListener("DOMContentLoaded", function(){

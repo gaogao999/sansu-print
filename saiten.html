@@ -138,6 +138,19 @@ label.file input{display:none}
 .bar .tag{font-size:11px;font-weight:700;color:var(--red);border:1px solid var(--red);
   border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
 .empty{text-align:center;color:var(--ink2);font-size:13px;padding:26px 10px;line-height:1.8}
+.advice{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;counter-reset:ad}
+.advice li{counter-increment:ad;border-left:3px solid var(--line);padding:2px 0 2px 12px}
+.advice li.base{border-left-color:var(--red)}
+.advice li.weak{border-left-color:var(--accent)}
+.advice li.good{border-left-color:var(--line)}
+.advice li b{display:block;font-size:15px;line-height:1.5}
+.advice li b::before{content:counter(ad) ". ";color:var(--ink2);font-weight:400}
+.advice li p{margin:3px 0 8px;font-size:12.5px;color:var(--ink2);line-height:1.7}
+.advice li a{display:inline-block;text-decoration:none;border:1.5px solid var(--accent);color:var(--accent);
+  border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:700}
+.advice li.base a{border-color:var(--red);color:var(--red)}
+.note{font-size:12px;color:var(--ink2);line-height:1.7;margin:10px 0 0;
+  border-top:1px solid var(--line);padding-top:9px}
 
 /* きろく */
 .recs{display:flex;flex-direction:column;gap:8px}
@@ -288,6 +301,201 @@ function viewLog(){
   return h+'</div></div>';
 }
 
+/* ==========================================================
+   弱点の 見立て
+   単元には 前提が ある。分数が できない とき、その手前の
+   「約数」や「整数の わり算」が 崩れていれば、そちらを 先に 指す。
+   ========================================================== */
+var U = {
+  int:{ja:"整数の 四則",g:[3,4,5,6,7],c:"calc"}, hole:{ja:"虫食い算",g:[3,4,5,6],c:"calc"},
+  mixed:{ja:"四則混合（かっこ）",g:[4,5,6,7],c:"calc"}, round:{ja:"がい数",g:[4],c:"calc"},
+  divisor:{ja:"倍数と 約数",g:[5],c:"calc"}, dec:{ja:"小数の 計算",g:[4,5,6,7],c:"calc"},
+  frac:{ja:"分数の 計算",g:[4,5,6,7],c:"calc"}, unit:{ja:"単位の かんさん",g:[3,4,5,6],c:"calc"},
+  ratioc:{ja:"割合・百分率",g:[5,6],c:"calc"}, hi:{ja:"比",g:[6],c:"calc"},
+  letter:{ja:"文字と 式",g:[6,7],c:"calc"}, prop:{ja:"比例と 反比例",g:[6,7],c:"calc"},
+  neg:{ja:"正負の数",g:[7],c:"calc"}, eq:{ja:"一次方程式",g:[7],c:"calc"},
+  circle3:{ja:"円と 球",g:[3],c:"fig"}, perim:{ja:"まわりの 長さ",g:[3,4],c:"fig"},
+  arect:{ja:"長方形・正方形の 面積",g:[4],c:"fig"}, angle4:{ja:"角の 大きさ",g:[4],c:"fig"},
+  atri:{ja:"三角形・四角形の 面積",g:[5],c:"fig"}, angle5:{ja:"三角形・四角形の 角",g:[5],c:"fig"},
+  circum:{ja:"円周",g:[5],c:"fig"}, vol5:{ja:"直方体の 体積",g:[5],c:"fig"},
+  acirc:{ja:"円の 面積",g:[6],c:"fig"}, vol6:{ja:"角柱・円柱の 体積",g:[6],c:"fig"},
+  angle7:{ja:"平行線と 角",g:[7],c:"fig"}, sector:{ja:"おうぎ形",g:[7],c:"fig"},
+  vol7:{ja:"円柱・円すいの 体積",g:[7],c:"fig"},
+  warith:{ja:"四則の 文章題",g:[3,4],c:"word"}, wtime:{ja:"時こくと 時間",g:[3],c:"word"},
+  wunit:{ja:"単位量あたり",g:[5],c:"word"}, wspeed:{ja:"速さ",g:[5,6],c:"word"},
+  wratio:{ja:"割合の 文章題",g:[5,6],c:"word"}, waverage:{ja:"平均",g:[5],c:"word"},
+  wfrac:{ja:"分数の 文章題",g:[6],c:"word"}, whi:{ja:"比の 文章題",g:[6],c:"word"},
+  wcase:{ja:"場合の数",g:[6],c:"word"}, weq:{ja:"方程式の 文章題",g:[7],c:"word"}
+};
+/* すすめる 問題数は、その 単元の 出しかたで 実際に えらべる 数に あわせる */
+function nFor(id){ return (U[id] && U[id].c==="calc") ? 20 : 12; }
+/* その単元を やる前に できていて ほしい こと */
+var PRE = {
+  hole:["int"], mixed:["int"], round:["int"], divisor:["int"], dec:["int"],
+  frac:["int","divisor"], unit:["int"], ratioc:["dec"], hi:["ratioc","divisor"],
+  letter:["int","mixed"], prop:["letter","ratioc"], neg:["int"], eq:["letter","neg"],
+  perim:["int"], arect:["int"], atri:["arect"], angle5:["angle4"], circum:["dec"],
+  vol5:["arect"], acirc:["circum"], vol6:["vol5","acirc"], angle7:["angle5"],
+  sector:["acirc"], vol7:["vol6"],
+  warith:["int"], wunit:["int"], wspeed:["wunit"], wratio:["ratioc"],
+  waverage:["int"], wfrac:["frac"], whi:["hi"], wcase:["int"], weq:["eq"]
+};
+var BASIC = ["int","dec","frac"];              /* ここが 崩れると 先が 全部 苦しい */
+var OPNAME = {"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"};
+var OPCODE = {"+":"a","-":"s","*":"m","/":"d"};
+var OK = 70, BAD = 60, MIN = 5, MINOP = 8;     /* 判断に つかう しきい値 */
+
+function rate(x){ return x.n ? Math.round(x.ok/x.n*100) : 0; }
+/* 学年を またいで 単元ごとに まとめる。
+   演算（＋－×÷）の 集計は 整数と 虫食い算だけ。分数の × などを 混ぜると
+   「かけ算が 弱い」と 見まちがえるため。 */
+function rollup(recs){
+  var byU = {}, byOp = {}, seq = {};
+  recs.forEach(function(r){
+    (r.perQ||[]).forEach(function(q){
+      var u = byU[q.unit] || (byU[q.unit] = {n:0, ok:0, ja:q.unitJa||(U[q.unit]&&U[q.unit].ja)||q.unit, g:q.grade});
+      u.n++; if(q.ok) u.ok++; if(q.grade>u.g) u.g = q.grade;
+      (seq[q.unit] || (seq[q.unit] = [])).push(q.ok ? 1 : 0);
+      if(q.op && (q.unit==="int" || q.unit==="hole")){
+        var o = byOp[q.op] || (byOp[q.op] = {n:0, ok:0});
+        o.n++; if(q.ok) o.ok++;
+      }
+    });
+  });
+  return {byU:byU, byOp:byOp, seq:seq};
+}
+function trend(list){
+  if(list.length < 12) return null;
+  var h = Math.floor(list.length/2), a = list.slice(0,h), b = list.slice(h);
+  var f = function(x){ return Math.round(x.reduce(function(p,q){return p+q;},0)/x.length*100); };
+  return {from:f(a), to:f(b)};
+}
+function linkTo(id, g, extra){
+  var u = U[id]; if(!u) return null;
+  var gg = g && u.g.indexOf(g)>=0 ? g : u.g[u.g.length-1];
+  return "./index.html?g="+gg+"&u="+encodeURIComponent(id)+(extra||"");
+}
+function nameOf(id){ return (U[id] && U[id].ja) || id; }
+
+/* 見立て。にがてな 単元を 見つけたら、その 手前を たどって
+   いちばん 奥で 崩れている ところ（＝直すべき 場所）を 指す。 */
+function advise(recs){
+  var R = rollup(recs), byU = R.byU, byOp = R.byOp;
+  var out = [], done = {}, ids = Object.keys(byU), total = 0;
+  ids.forEach(function(id){ total += byU[id].n; });
+  function ok(id){ return byU[id] && byU[id].n>=MIN; }
+  function shaky(id){ return ok(id) && rate(byU[id])<OK; }     /* 70%未満＝あやしい */
+  function push(it){ if(!done[it.key]){ done[it.key]=1; out.push(it); } }
+  /* 手前を たどって、いちばん 奥の あやしい ところ */
+  function root(id, depth){
+    var pres = PRE[id] || [], i;
+    if(depth>4) return null;
+    for(i=0;i<pres.length;i++){
+      if(shaky(pres[i])) return root(pres[i], depth+1) || pres[i];
+    }
+    return null;
+  }
+  function firstUntouched(id){
+    var pres = PRE[id] || [], i;
+    for(i=0;i<pres.length;i++) if(!byU[pres[i]]) return pres[i];
+    return null;
+  }
+
+  /* 1) 整数の ＋－×÷ の うち、1つだけ 落ちていないか */
+  var ops = Object.keys(byOp).filter(function(o){ return byOp[o].n>=MINOP; });
+  if(ops.length>=2){
+    ops.sort(function(a,b){ return rate(byOp[a]) - rate(byOp[b]); });
+    var lo = ops[0], hi = ops[ops.length-1];
+    if(rate(byOp[lo])<OK && rate(byOp[hi])-rate(byOp[lo])>=15){
+      done["u:int"] = 1;
+      push({key:"op"+lo, tone:"base", unit:"int",
+        title:"整数の "+OPNAME[lo]+"を 集中して やる",
+        why:"整数の "+OPNAME[lo]+"が "+rate(byOp[lo])+"%（"+byOp[lo].ok+"/"+byOp[lo].n+"問）。"
+          + "ほかの 計算は "+rate(byOp[hi])+"% なので、ここだけ 抜けています。"
+          + "分数・割合・方程式は すべて この上に のっています。",
+        link:linkTo("int", byU.int && byU.int.g,
+          "&o="+OPCODE[lo]+"&da=2&db=1&n=20"+(lo==="/" ? "&dm=rem" : "")),
+        label:OPNAME[lo]+"だけ 出す"});
+    }
+  }
+  /* 2) にがてな 単元（60%未満）を 出来ない 順に。手前が 崩れていれば 手前を 指す */
+  ids.filter(function(id){ return ok(id) && rate(byU[id])<BAD; })
+     .sort(function(a,b){ return rate(byU[a]) - rate(byU[b]); })
+     .forEach(function(id){
+    if(done["u:"+id]) return;
+    var rc = root(id,0);
+    if(rc){
+      done["u:"+id] = 1; done["u:"+rc] = 1;
+      push({key:"root"+rc, tone:"base", unit:rc,
+        title:nameOf(rc)+"から。"+nameOf(id)+"は そのあと",
+        why:nameOf(id)+"が "+rate(byU[id])+"% ですが、その 土台の "+nameOf(rc)+"も "
+          + rate(byU[rc])+"% です。先に こちらを 通すほうが、遠回りに 見えて 近道です。",
+        link:linkTo(rc, byU[rc].g, "&n="+nFor(rc)), label:nameOf(rc)+"を つくる"});
+      return;
+    }
+    var nt = firstUntouched(id);
+    if(nt){
+      done["u:"+id] = 1;
+      push({key:"try"+nt, tone:"base", unit:nt,
+        title:nameOf(nt)+"を 先に ためす",
+        why:nameOf(id)+"が "+rate(byU[id])+"%。その 土台の "+nameOf(nt)
+          + "は まだ 1問も といていません。そこが できているか 先に 見ると、原因が はっきりします。",
+        link:linkTo(nt, null, "&n="+nFor(nt)), label:nameOf(nt)+"を ためす"});
+      return;
+    }
+    done["u:"+id] = 1;
+    var basic = BASIC.indexOf(id)>=0;
+    push({key:"weak"+id, tone: basic ? "base" : "weak", unit:id,
+      title:nameOf(id)+"を もう1枚",
+      why:nameOf(id)+"が "+rate(byU[id])+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"
+        + (basic ? "ここは この先 ずっと つかう ところなので、先に 立て直すのが 早道です。"
+                 : "土台の 単元は とれているので、この単元を くり返すのが 効きます。"),
+      link:linkTo(id, byU[id].g, "&n="+nFor(id)), label:"もう1枚 つくる"});
+  });
+  /* 3) 60〜70%の 土台単元も、ほかに 言うことが 少なければ 拾う */
+  if(out.length<2){
+    BASIC.forEach(function(id){
+      if(done["u:"+id] || !shaky(id)) return;
+      var up = trend(R.seq[id]);                   /* のびている 途中なら せかさない */
+      if(up && up.to - up.from >= 20) return;
+      done["u:"+id] = 1;
+      push({key:"basic"+id, tone:"base", unit:id,
+        title:nameOf(id)+"を もう少し",
+        why:nameOf(id)+"が "+rate(byU[id])+"%。あと ひと押しで 土台が かたまります。",
+        link:linkTo(id, byU[id].g, "&n="+nFor(id)), label:"もう1枚 つくる"});
+    });
+  }
+  var weakCount = out.length;
+  /* 4) のびている ところ */
+  ids.forEach(function(id){
+    var t = trend(R.seq[id]);
+    if(t && t.to - t.from >= 20 && t.to >= OK)
+      push({key:"up"+id, tone:"good", unit:id,
+        title:nameOf(id)+"は のびています",
+        why:"はじめの ころ "+t.from+"% → さいきん "+t.to+"%。ここは 手を ゆるめて 大丈夫です。"});
+  });
+  /* 5) つまずきが 見あたらない ときだけ、まだの 単元を すすめる（基礎の 順に） */
+  if(!weakCount){
+    var gs = {}; ids.forEach(function(id){ gs[byU[id].g] = 1; });
+    var g = Object.keys(gs).map(Number).sort(function(a,b){return a-b;}).pop();
+    var order = ["int","hole","dec","frac","mixed","divisor","unit","ratioc","hi","letter","prop","neg","eq"];
+    if(g){
+      var rest = Object.keys(U).filter(function(id){ return U[id].g.indexOf(g)>=0 && !byU[id]; })
+        .sort(function(a,b){
+          var ia = order.indexOf(a), ib = order.indexOf(b);
+          return (ia<0?99:ia) - (ib<0?99:ib);
+        });
+      if(rest.length) push({key:"rest", tone:"info", unit:rest[0],
+        title:"つぎは "+nameOf(rest[0])+"を ためす",
+        why:({3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"}[g])+"で まだ といていない 単元が "
+          + rest.length+"つ あります（"+rest.slice(0,3).map(nameOf).join("・")
+          + (rest.length>3 ? " ほか" : "")+"）。ひととおり 見ておくと 穴が わかります。",
+        link:linkTo(rest[0], g, "&n="+nFor(rest[0])), label:nameOf(rest[0])+"を ためす"});
+    }
+  }
+  return {items:out, total:total, byOp:byOp, weak:weakCount};
+}
+
 /* ---------- 分析 ---------- */
 function analyse(records){
   var byUnit = {}, byGrade = {}, i, j;
@@ -330,8 +538,45 @@ function viewAna(){
     + '<div class="tile"><b>'+pct(last.score,last.total)+'<span style="font-size:14px">点</span></b><span>いちばん 新しい 1枚</span></div>'
     + '</div></div>';
 
+  /* --- 見立て（基礎が 先） --- */
+  var ad = advise(recs);
+  h += '<div class="card"><h2>つぎに やると よいこと <em>基礎から 順に</em></h2>';
+  if(ad.total < 20){
+    h += '<p class="muted">まだ '+ad.total+'問です。あと '+(20-ad.total)
+      + '問ほど とくと、どこで つまずいているか 見えてきます。</p>';
+  }
+  if(ad.items.length){
+    h += '<ol class="advice">';
+    ad.items.slice(0,4).forEach(function(it){
+      h += '<li class="'+it.tone+'"><b>'+esc(it.title)+'</b><p>'+esc(it.why)+'</p>'
+        + (it.link ? '<a href="'+it.link+'">'+esc(it.label)+'</a>' : '')+'</li>';
+    });
+    h += '</ol>';
+  } else {
+    h += '<p class="muted">いまのところ 大きな つまずきは 見えません。'
+      + 'このまま いろいろな 単元を まぜて つづけて ください。</p>';
+  }
+  h += '<p class="note">見かた：5問いじょう といて 70%に とどかない ところを「土台が あやしい」、'
+    + '60%未満を「にがて」と しています。にがてな 単元が あっても、その 手前の 単元が 崩れていれば'
+    + '<b>手前を 先に</b> すすめます。</p></div>';
+
   var a = analyse(recs), gs = Object.keys(a.byGrade).sort(), us = Object.keys(a.byUnit);
   var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+  /* --- 計算の 種類ごと --- */
+  var ops = Object.keys(ad.byOp).filter(function(o){ return ad.byOp[o].n>=3; });
+  if(ops.length){
+    var ORD = ["+","-","*","/"];
+    ops.sort(function(x,y){ return ORD.indexOf(x) - ORD.indexOf(y); });
+    h += '<div class="card"><h2>計算の 種類ごと</h2><div class="bars">';
+    ops.forEach(function(o){
+      var x = ad.byOp[o], p = pct(x.ok,x.n);
+      h += '<div class="bar"><div class="nm">'+OPNAME[o]+'</div>'
+        + '<div class="vl">'+p+'%<small>'+x.ok+'/'+x.n+'問</small></div>'
+        + '<div class="track"><div class="fill" style="width:'+p+'%"></div></div></div>';
+    });
+    h += '</div><p class="note">整数と 虫食い算の 問題だけで 数えています。'
+      + '分数や 小数の × ÷ を まぜると、計算の 力と 単元の 理解が ごちゃまぜに なるためです。</p></div>';
+  }
   if(gs.length){
     h += '<div class="card"><h2>学年ごとの 出来ぐあい</h2><div class="bars">';
     gs.forEach(function(g){
@@ -354,16 +599,6 @@ function viewAna(){
   });
   h += '</div></div>';
 
-  var weak = us.filter(function(id){ var x=a.byUnit[id]; return x.n>=5 && pct(x.ok,x.n)<60; }).slice(0,3);
-  if(weak.length){
-    h += '<div class="card"><h2>つぎに やると よい 単元</h2><div class="chips">';
-    weak.forEach(function(id){
-      var x = a.byUnit[id];
-      h += '<a class="btn" style="text-decoration:none" href="./index.html?g='+x.g+'&u='+encodeURIComponent(x.id)+'">'
-        + esc(x.ja)+' を つくる</a>';
-    });
-    h += '</div><p class="muted" style="margin:8px 0 0">5問いじょう といて 60%に とどかない 単元です。</p></div>';
-  }
   h += '<div class="card"><h2>さいきんの 点数</h2><div class="bars">';
   recs.slice(-10).reverse().forEach(function(r){
     var p = pct(r.score,r.total);
@@ -452,7 +687,8 @@ document.addEventListener("DOMContentLoaded", function(){
       sheetId: sel.id, at: new Date().toISOString(), kid: name,
       title: sel.title, score: okN, total: marks.length,
       perQ: sel.qs.map(function(q,i){
-        return {unit:q.unit, unitJa:q.unitJa, grade:q.grade, ok:marks[i]===1};
+        return {unit:q.unit, unitJa:q.unitJa, grade:q.grade, ok:marks[i]===1,
+                op:q.op||"", kind:q.kind||"", tid:q.tid||""};
       }),
       photo: photo || undefined
     });
