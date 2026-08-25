@@ -150,27 +150,28 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   display:flex;flex-direction:column;overflow:hidden;
 }
 .paper.en{font-family:"Zen Maru Gothic","Trebuchet MS",-apple-system,sans-serif}
-.paper .head{display:flex;align-items:flex-end;gap:6mm;border-bottom:1.4pt solid #1B3A5C;padding-bottom:2.5mm}
+.paper .head{display:flex;align-items:flex-end;gap:5mm;border-bottom:1.4pt solid #1B3A5C;padding-bottom:2.5mm}
 .paper .head .t{flex:1 1 auto;min-width:0;overflow:hidden}
+.paper .head .qr{flex:0 0 auto;background:#fff;padding:1.5mm;box-sizing:content-box}
+.paper .head .qr svg{display:block;width:100%;height:100%}
 .paper .head h2{margin:0;font-size:6.4mm;font-weight:700;line-height:1.25;letter-spacing:.02em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .paper .head .tag{font-size:3mm;color:#5A7391;letter-spacing:.05em;margin-top:.5mm;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.paper .fields{display:flex;gap:4mm;flex:0 0 auto;font-size:3.4mm;color:#5A7391}
-.paper .fields .fl{display:flex;align-items:flex-end;gap:1.5mm}
-.paper .fields .fl i{font-style:normal}
-.paper .fields .fl u{display:inline-block;text-decoration:none;border-bottom:.9pt solid #1B3A5C;height:7mm}
+/* 名まえ・日づけ・点数は わき役。小さく して 題の 下に 置く */
+.paper .fields{display:flex;gap:5mm;margin-top:1.8mm;font-size:2.9mm;color:#8C9EB2}
+.paper .fields .fl{display:flex;align-items:flex-end;gap:1.2mm;min-width:0}
+.paper .fields .fl i{font-style:normal;white-space:nowrap}
+.paper .fields .fl u{display:inline-block;text-decoration:none;border-bottom:.7pt solid #7A8FA6;height:5mm}
 .paper .fields .nm u{width:30mm}
 .paper .fields .dt u{width:18mm}
 .paper .body{flex:1 1 auto;min-height:0;padding-top:6mm}
 .paper .body.center{display:flex;align-items:center;justify-content:center}
 .paper .foot{
-  flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end;gap:4mm;
+  flex:0 0 auto;display:flex;justify-content:space-between;align-items:baseline;gap:4mm;
   font-size:2.8mm;color:#8C9EB2;border-top:.6pt solid #C6D3E0;padding-top:1.6mm;margin-top:3mm;
 }
-.paper .foot .qrnote{display:inline-block;margin-top:.8mm}
-.paper .foot .qr{flex:0 0 auto;background:#fff;padding:1.5mm;box-sizing:content-box}
-.paper .foot .qr svg{display:block;width:100%;height:100%}
+.paper .foot .qrnote{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* こたえは 紙には 出さない（場所だけ とっておく）。QR から 見る。 */
 .v{color:#D14338;font-weight:700}
@@ -461,7 +462,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
     <button type="button" class="btn-new" id="regen">べつの問題に する</button>
     <button type="button" class="btn-print" id="print">A4で 印刷する</button>
     <div class="no"><span>プリント No.</span><b id="seed">0000</b></div>
-    <p class="qrhelp">こたえは 紙の 右下の QR に 入っています。スマホの カメラで
+    <p class="qrhelp">こたえは 紙の 右上の QR に 入っています。スマホの カメラで
       うつすと、さいてんの 画面が ひらいて こたえが 出ます。</p>
   </div>
 </aside>
@@ -2141,17 +2142,19 @@ function paper(st,inner,extraField,sheet,qs){
       + '<span class="fl dt"><i>'+(extraField||T("点数","Score"))+'</i><u></u></span>'
       + '</div>';
   }
+  /* QR は 右上。こたえの ぶんだけ 下の 余白が 空くので、問題が 1〜2行 増える。
+     名まえ・日づけ・点数は 小さくして 題の 下に たたむ。 */
   return '<div class="wrap"><div class="paper'+(LANG==="en"?" en":"")+'">'
     + '<div class="head"><div class="t"><h2>'+esc(st.title||autoTitle())+'</h2>'
-    + '<div class="tag">'+esc(hint(st))+'</div></div>'
+    + '<div class="tag">'+esc(hint(st))+'</div>'
     + fields + '</div>'
+    + qrsvg + '</div>'
     + '<div class="'+bodyCls+'">'+inner+'</div>'
-    + '<div class="foot"><span>'+T("プリント No. ","Sheet No. ")+st.seed
-    + (qrsvg ? '<br><span class="qrnote">'
-        + T("こたえは この QR から（さいてんの 画面が ひらきます）","Scan this QR for the answer key")
+    + '<div class="foot"><span>'+T("プリント No. ","Sheet No. ")+st.seed+'</span>'
+    + (qrsvg ? '<span class="qrnote">'
+        + T("こたえは 右上の QR から（さいてんの 画面が ひらきます）","Scan the QR at the top right for the answer key")
         + '</span>' : '')
-    + '</span>'
-    + qrsvg+'</div>'
+    + '</div>'
     + '</div></div>';
 }
 
