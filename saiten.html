@@ -162,6 +162,21 @@ label.file input{display:none}
 .rec .p{flex:0 0 auto;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
 .rec .del{flex:0 0 auto;background:none;border:none;color:var(--ink2);font-size:17px;cursor:pointer;padding:4px}
 .hide{display:none}
+
+.bkrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.bkrow .btn{flex:1 1 160px}
+.bkrow .file{flex:1 1 160px;display:flex;align-items:center;justify-content:center;text-align:center}
+
+/* QR から とどいた とき */
+.qrhit{border-color:var(--accent)}
+.qrhit h2{color:var(--accent)}
+.masuwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.masu{border-collapse:collapse;font-variant-numeric:tabular-nums;margin:2px 0}
+table.masu th,table.masu td{border:1px solid var(--line);padding:5px 7px;text-align:center;
+  font-size:13px;min-width:30px}
+table.masu th{background:var(--accent-soft);font-weight:600}
+table.masu tbody th{background:var(--accent-soft)}
+table.masu td{color:var(--accent);font-weight:600}
 </style>
 </head>
 <body>
@@ -225,12 +240,121 @@ function fmtDate(iso){
 }
 function pct(a,b){ return b ? Math.round(a/b*100) : 0; }
 
+/* ---------- 紙の QR から こたえを うけとる ----------
+   プリントの QR は #s=（そのまま）か #b=（base64）で 中身を つれてくる。
+   1*seed*単元*問ごとの単元番号*問ごとの演算*こたえ!こたえ!…
+   2*seed*演算*よこの数*たての数            （100マス）              */
+var OPC = {a:"+", s:"-", m:"*", d:"/", z:""};
+var OPSIGN = {"+":"＋","-":"－","*":"×","/":"÷"};
+var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1"};
+function showAns(a){
+  return String(a).replace(/(\d)~(\d)/g,"$1/$2")
+                  .replace(/(\d)r(\d)/g,"$1 あまり $2")
+                  .replace(/_/g," ");
+}
+function qrTitle(units){
+  var gs = [], ns = [], i, u, d;
+  for(i=0;i<units.length;i++){
+    u = units[i]; d = u.lastIndexOf(".");
+    var id = d>0 ? u.slice(0,d) : u, g = d>0 ? +u.slice(d+1) : 0;
+    if(GN[g] && gs.indexOf(GN[g])<0) gs.push(GN[g]);
+    var nm = (U[id] && U[id].ja) || "";
+    if(nm && ns.indexOf(nm)<0) ns.push(nm);
+  }
+  var t = (gs.length>2 ? "学年ミックス" : gs.join("・"))
+        + " " + (ns.slice(0,2).join("・") + (ns.length>2 ? " ほか" : ""));
+  return t.trim() || "プリント";
+}
+function decodeHash(){
+  var m = /[#&](s|b)=([^&]+)/.exec(location.hash || "");
+  if(!m) return null;
+  var pay;
+  try{
+    pay = m[1]==="s" ? decodeURIComponent(m[2])
+        : decodeURIComponent(escape(atob(m[2].replace(/-/g,"+").replace(/_/g,"/"))));
+  }catch(e){ return null; }
+  var f = pay.split("*");
+  if(f[0]==="2" && f.length>=5){
+    var op = OPC[f[2]] || "*";
+    var num = function(a){ return a.split("-").map(Number).filter(function(n){
+      return isFinite(n) && n>=0 && n<=999; }).slice(0,20); };
+    if(!num(f[3]).length || !num(f[4]).length) return null;
+    return {masu:{op:op, cols:num(f[3]), rows:num(f[4])},
+            id:"q"+f[1], no:f[1], at:new Date().toISOString(),
+            title:"100マス計算（"+OPSIGN[op]+"）", qs:[]};
+  }
+  if(f[0]!=="1" || f.length<6) return null;
+  var units = f[2].split("-"), ans = f[5].split("!").slice(0,200), idx = f[3], ops = f[4], out = [], i;
+  for(i=0;i<ans.length;i++){
+    var key = units[parseInt(idx.length===1 ? idx : idx.charAt(i), 36)] || "";
+    var d = key.lastIndexOf("."), id = d>0 ? key.slice(0,d) : key, g = d>0 ? +key.slice(d+1) : 0;
+    if(!U[id]) id = "";                                   /* 知らない単元は 捨てる */
+    if(!(g>=3 && g<=7)) g = 0;
+    out.push({q:"", a:esc(showAns(ans[i])), unit:id, unitJa:(U[id] && U[id].ja) || "",
+              grade:g, op:OPC[ops.length===1 ? ops : ops.charAt(i)] || "",
+              kind:(U[id] && U[id].c) || "", tid:""});
+  }
+  if(!out.length) return null;
+  return {id:"q"+f[1], no:f[1], at:new Date().toISOString(), title:qrTitle(units), qs:out};
+}
+/* QR から 来た ときの 受けとり。ひらいたときと、あとから 読んだとき の 両方 */
+function takeHash(){
+  var q = decodeHash();
+  if(!q) return false;
+  if(q.masu){
+    qrMasu = q.masu; sel = null; marks = [];
+    qrNote = q.title + " の こたえです。";
+  } else {
+    var got = mergeSheet(q);
+    qrMasu = null; sel = got; marks = got.qs.map(function(){ return 1; }); photo = null;
+    qrNote = "No." + q.no + "　" + q.title + "（" + q.qs.length + "問）";
+  }
+  tab = "mark";
+  try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+  return true;
+}
+/* とどいた プリントを 記録に まぜる（同じ No. は 1つだけ） */
+function mergeSheet(sh){
+  var a = readJSON(HIST,[]);
+  if(!Array.isArray(a)) a = [];
+  var i;
+  for(i=0;i<a.length;i++) if(a[i] && a[i].id===sh.id) return a[i];
+  a.push(sh);
+  if(a.length>40) a = a.slice(-40);
+  writeJSON(HIST,a);
+  return sh;
+}
+function masuTable(m){
+  var h = '<table class="masu"><thead><tr><th>'+esc(OPSIGN[m.op]||m.op)+'</th>', r, c, x, y;
+  for(c=0;c<m.cols.length;c++) h += '<th>'+esc(m.cols[c])+'</th>';
+  h += '</tr></thead><tbody>';
+  for(r=0;r<m.rows.length;r++){
+    h += '<tr><th>'+esc(m.rows[r])+'</th>';
+    for(c=0;c<m.cols.length;c++){
+      x = Number(m.cols[c]); y = Number(m.rows[r]);
+      h += '<td>'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</td>';
+    }
+    h += '</tr>';
+  }
+  return h+'</tbody></table>';
+}
+
 /* ---------- いまの状態 ---------- */
 var tab = "mark", sel = null, marks = [], kid = "", photo = null, anaKid = null;
+var qrMasu = null, qrNote = "";
 
 /* ---------- さいてん ---------- */
 function viewMark(){
   var list = sheets(), s = store(), h = "";
+  if(qrNote){
+    h += '<div class="card qrhit"><h2>QR を 読みこみました</h2>'
+       + '<p class="muted">'+esc(qrNote)+'</p></div>';
+  }
+  if(qrMasu){
+    return h + '<div class="card"><h2>100マス計算の こたえ</h2>'
+      + '<div class="masuwrap">'+masuTable(qrMasu)+'</div>'
+      + '<p class="muted">100マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
+  }
   if(!list.length){
     return '<div class="card"><div class="empty">'
       + 'まだ プリントが ありません。<br>'
@@ -287,7 +411,8 @@ function refreshScore(){
 /* ---------- きろく ---------- */
 function viewLog(){
   var s = store();
-  if(!s.records.length) return '<div class="card"><div class="empty">まだ 記録が ありません。</div></div>';
+  if(!s.records.length) return backupCard(s) +
+    '<div class="card"><div class="empty">まだ 記録が ありません。</div></div>';
   var h = '<div class="card"><h2>きろく <em>'+s.records.length+'件</em></h2><div class="recs">';
   s.records.slice().reverse().forEach(function(r){
     h += '<div class="rec">'
@@ -298,7 +423,92 @@ function viewLog(){
       + '<button type="button" class="del" data-del="'+esc(r.id)+'" aria-label="この記録を けす">×</button>'
       + '</div>';
   });
-  return h+'</div></div>';
+  h += '</div></div>';
+  return h + backupCard(s);
+}
+
+/* ---------- データを 守る ----------
+   ブラウザの おぼえた ものは、空きが 足りない ときや
+   しばらく つかわない ときに 消える ことが ある。
+   だから「ファイルに 書き出す」を 用意して、そこが 本ものの 置き場に なる。 */
+var BK = "sansu-saiten-backup-v1";
+function lastBackup(){
+  try{ return localStorage.getItem(BK) || ""; }catch(e){ return ""; }
+}
+function backupCard(s){
+  var last = lastBackup(), n = s.records.length;
+  var since = 0, i;
+  for(i=0;i<s.records.length;i++) if(!last || s.records[i].at > last) since++;
+  var warn = n>0 && (!last || since>=10);
+  return '<div class="card'+(warn?' qrhit':'')+'"><h2>データを まもる</h2>'
+    + '<p class="muted">記録は この 端末の ブラウザに おぼえています。'
+    + 'ブラウザの データを 消したり、しばらく つかわないと 消える ことが あります。'
+    + 'ときどき ファイルに 書き出して おいて ください。</p>'
+    + '<p class="muted">いまの 記録 '+n+'件'
+    + (last ? '　/　さいごの 書き出し '+fmtDate(last)+(since?'（そのあと '+since+'件）':'（そのあとの 追加なし）')
+            : '　/　まだ 一度も 書き出して いません')
+    + (persistOK===true ? '　/　この端末では 消えにくい 設定に なっています' : '')
+    + '</p>'
+    + '<div class="bkrow">'
+    + '<button type="button" class="btn fill" id="expjson">ファイルに 書き出す</button>'
+    + '<label class="file">ファイルから 読みこむ<input type="file" accept="application/json,.json" id="impjson"></label>'
+    + '</div></div>';
+}
+function backupBlob(){
+  var s = store(), h = readJSON(HIST,[]);
+  return JSON.stringify({app:"sansu-print", v:1, at:new Date().toISOString(),
+    kids:s.kids, records:s.records, sheets:Array.isArray(h)?h:[]});
+}
+function stamp(name){
+  var d = new Date(), p = function(n){ return (n<10?"0":"")+n; };
+  return name+"-"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+".json";
+}
+function exportJSON(){
+  var blob = new Blob([backupBlob()], {type:"application/json"});
+  var url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = stamp("sansu-kiroku");
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  try{ localStorage.setItem(BK, new Date().toISOString()); }catch(e){}
+}
+/* 読みこみは 足し算。同じ id の ものは 入れない（消さない・上書きしない） */
+function importJSON(text){
+  var d;
+  try{ d = JSON.parse(text); }catch(e){ return {err:"ファイルを 読めませんでした。"}; }
+  if(!d || (!Array.isArray(d.records) && !Array.isArray(d.sheets)))
+    return {err:"この ファイルには 記録が 入っていません。"};
+  var s = store(), have = {}, addR = 0, addS = 0, addK = 0, i;
+  s.records.forEach(function(r){ have[r.id] = 1; });
+  (d.records||[]).forEach(function(r){
+    if(!r || !r.id || have[r.id] || !Array.isArray(r.perQ)) return;
+    have[r.id] = 1; s.records.push(r); addR++;
+  });
+  s.records.sort(function(a,b){ return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; });
+  if(s.records.length>400) s.records = s.records.slice(-400);
+  (d.kids||[]).forEach(function(k){
+    if(typeof k==="string" && k && s.kids.indexOf(k)<0){ s.kids.push(k); addK++; }
+  });
+  if(!saveStore(s)) return {err:"この端末に 保存できませんでした（空きが たりません）。"};
+  var h = readJSON(HIST,[]); if(!Array.isArray(h)) h = [];
+  var hh = {}; h.forEach(function(x){ if(x && x.id) hh[x.id] = 1; });
+  (d.sheets||[]).forEach(function(x){
+    if(!x || !x.id || hh[x.id] || !Array.isArray(x.qs)) return;
+    hh[x.id] = 1; h.push(x); addS++;
+  });
+  if(h.length>60) h = h.slice(-60);
+  writeJSON(HIST,h);
+  return {r:addR, s:addS, k:addK};
+}
+/* 消えにくい 置き場に して もらう（できる ブラウザだけ） */
+var persistOK = null;
+function askPersist(){
+  try{
+    if(!navigator.storage || !navigator.storage.persist) return;
+    navigator.storage.persisted().then(function(on){
+      if(on){ persistOK = true; return; }
+      navigator.storage.persist().then(function(got){ persistOK = !!got; });
+    })["catch"](function(){});
+  }catch(e){}
 }
 
 /* ==========================================================
@@ -622,11 +832,14 @@ function draw(){
 
 document.addEventListener("DOMContentLoaded", function(){
   var gf = document.getElementById("gf"); if(gf) gf.media = "all";
+  askPersist();
+  takeHash();
+  window.addEventListener("hashchange", function(){ if(takeHash()) draw(); });
   draw();
 
   document.getElementById("tabs").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
-    tab = b.dataset.v; draw();
+    tab = b.dataset.v; qrMasu = null; qrNote = ""; draw();
   });
 
   document.getElementById("view").addEventListener("click", function(e){
@@ -634,7 +847,7 @@ document.addEventListener("DOMContentLoaded", function(){
     if(!b) return;
     if(b.dataset.sheet!==undefined){
       var s = sheets().filter(function(x){ return x.id===b.dataset.sheet; })[0];
-      if(s){ sel = s; marks = s.qs.map(function(){ return 1; }); photo = null; }
+      if(s){ sel = s; marks = s.qs.map(function(){ return 1; }); photo = null; qrMasu = null; qrNote = ""; }
       draw(); return;
     }
     if(b.dataset.kid!==undefined){ kid = b.dataset.kid; draw(); return; }
@@ -647,6 +860,7 @@ document.addEventListener("DOMContentLoaded", function(){
       refreshScore(); return;
     }
     if(b.id==="delpic"){ photo = null; draw(); return; }
+    if(b.id==="expjson"){ exportJSON(); draw(); return; }
     if(b.dataset.del!==undefined){
       if(!confirm("この記録を けしますか？")) return;
       var st = store();
@@ -659,6 +873,22 @@ document.addEventListener("DOMContentLoaded", function(){
     if(e.target.id==="kidnew") kid = e.target.value.trim();
   });
   document.getElementById("view").addEventListener("change", function(e){
+    if(e.target.id==="impjson"){
+      var jf = e.target.files && e.target.files[0];
+      if(!jf) return;
+      var fr = new FileReader();
+      fr.onload = function(){
+        var r = importJSON(String(fr.result));
+        if(r.err) alert(r.err);
+        else if(!r.r && !r.s && !r.k) alert("新しい 記録は ありませんでした（すべて 入って います）。");
+        else alert("読みこみました。記録 "+r.r+"件 / プリント "+r.s+"まい を 足しました。");
+        draw();
+      };
+      fr.onerror = function(){ alert("ファイルを 読めませんでした。"); };
+      fr.readAsText(jf);
+      e.target.value = "";
+      return;
+    }
     if(e.target.id!=="pic") return;
     var f = e.target.files && e.target.files[0];
     if(!f) return;
@@ -692,7 +922,7 @@ document.addEventListener("DOMContentLoaded", function(){
       }),
       photo: photo || undefined
     });
-    if(s.records.length>200) s.records = s.records.slice(-200);
+    if(s.records.length>400) s.records = s.records.slice(-400);
     if(!saveStore(s)) alert("記録を 保存できませんでした（ブラウザの 空きが たりません）。");
     sel = null; marks = []; photo = null;
     tab = "log"; draw();
