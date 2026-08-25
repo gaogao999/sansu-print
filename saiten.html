@@ -143,9 +143,21 @@ label.file input{display:none}
 .advice li.base{border-left-color:var(--red)}
 .advice li.weak{border-left-color:var(--accent)}
 .advice li.good{border-left-color:var(--line)}
+.advice li.care{border-left-color:var(--accent);border-left-style:dashed}
 .advice li b{display:block;font-size:15px;line-height:1.5}
 .advice li b::before{content:counter(ad) ". ";color:var(--ink2);font-weight:400}
-.advice li p{margin:3px 0 8px;font-size:12.5px;color:var(--ink2);line-height:1.7}
+.advice li p{margin:5px 0;font-size:12.5px;color:var(--ink2);line-height:1.75}
+.advice li p span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;
+  color:var(--ink2);opacity:.75;margin-bottom:1px}
+.advice li p.obs{color:var(--ink)}
+.advice li p.todo{color:var(--ink)}
+.advice li p.todo span{color:var(--accent);opacity:1}
+.advice li.base p.todo span{color:var(--red)}
+.advice li b i.soft{display:inline-block;font-style:normal;font-size:10.5px;font-weight:600;
+  margin-left:7px;padding:1px 7px;border:1px solid var(--line);border-radius:20px;
+  color:var(--ink2);vertical-align:2px}
+.advice li a{margin-top:4px}
+.lead{margin:0 0 10px;font-size:13.5px;line-height:1.8;color:var(--ink)}
 .advice li a{display:inline-block;text-decoration:none;border:1.5px solid var(--accent);color:var(--accent);
   border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:700}
 .advice li.base a{border-color:var(--red);color:var(--red)}
@@ -283,19 +295,33 @@ function decodeHash(){
             id:"q"+f[1], no:f[1], at:new Date().toISOString(),
             title:"100マス計算（"+OPSIGN[op]+"）", qs:[]};
   }
-  if(f[0]!=="1" || f.length<6) return null;
-  var units = f[2].split("-"), ans = f[5].split("!").slice(0,200), idx = f[3], ops = f[4], out = [], i;
+  /* v3: 3*No.*型のならび*問ごとの番号*こたえ*むずかしさ
+     v1: 1*No.*単元*問ごとの番号*演算*こたえ（前に 刷った プリント）  */
+  var v3 = f[0]==="3" && f.length>=5, v1 = f[0]==="1" && f.length>=6;
+  if(!v3 && !v1) return null;
+  var tags = f[2].split("-"), idx = f[3];
+  var ans = (v3 ? f[4] : f[5]).split("!").slice(0,200);
+  var ops = v1 ? f[4] : "", prof = v3 ? (f[5]||"") : "";
+  var out = [], i, units = [];
+  if(!/^[a-z0-9]{0,8}$/.test(prof)) prof = "";
   for(i=0;i<ans.length;i++){
-    var key = units[parseInt(idx.length===1 ? idx : idx.charAt(i), 36)] || "";
-    var d = key.lastIndexOf("."), id = d>0 ? key.slice(0,d) : key, g = d>0 ? +key.slice(d+1) : 0;
+    var key = tags[parseInt(idx.length===1 ? idx : idx.charAt(i), 36)] || "";
+    var d = key.indexOf("."), id = d>0 ? key.slice(0,d) : key;
+    var rest = d>0 ? key.slice(d+1) : "";
+    var g = +rest.charAt(0) || 0;
+    var op = v3 ? (OPC[rest.charAt(1)] || "") : (OPC[ops.length===1 ? ops : ops.charAt(i)] || "");
+    var sub = v3 ? rest.slice(2) : "";
     if(!U[id]) id = "";                                   /* 知らない単元は 捨てる */
     if(!(g>=3 && g<=7)) g = 0;
+    if(id && U[id].c!=="calc") sub = TIDN[sub] || "";     /* 2文字の 型コードを もどす */
+    else if(!/^[A-Za-z]{0,6}$/.test(sub)) sub = "";
+    if(units.indexOf(id+"."+g)<0) units.push(id+"."+g);
     out.push({q:"", a:esc(showAns(ans[i])), unit:id, unitJa:(U[id] && U[id].ja) || "",
-              grade:g, op:OPC[ops.length===1 ? ops : ops.charAt(i)] || "",
-              kind:(U[id] && U[id].c) || "", tid:""});
+              grade:g, op:op, kind:(U[id] && U[id].c) || "", tid:sub, sub:sub});
   }
   if(!out.length) return null;
-  return {id:"q"+f[1], no:f[1], at:new Date().toISOString(), title:qrTitle(units), qs:out};
+  return {id:"q"+f[1], no:f[1], at:new Date().toISOString(),
+          title:qrTitle(units), prof:prof, qs:out};
 }
 /* QR から 来た ときの 受けとり。ひらいたときと、あとから 読んだとき の 両方 */
 function takeHash(){
@@ -537,8 +563,6 @@ var U = {
   wfrac:{ja:"分数の 文章題",g:[6],c:"word"}, whi:{ja:"比の 文章題",g:[6],c:"word"},
   wcase:{ja:"場合の数",g:[6],c:"word"}, weq:{ja:"方程式の 文章題",g:[7],c:"word"}
 };
-/* すすめる 問題数は、その 単元の 出しかたで 実際に えらべる 数に あわせる */
-function nFor(id){ return (U[id] && U[id].c==="calc") ? 20 : 12; }
 /* その単元を やる前に できていて ほしい こと */
 var PRE = {
   hole:["int"], mixed:["int"], round:["int"], divisor:["int"], dec:["int"],
@@ -553,26 +577,127 @@ var PRE = {
 var BASIC = ["int","dec","frac"];              /* ここが 崩れると 先が 全部 苦しい */
 var OPNAME = {"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"};
 var OPCODE = {"+":"a","-":"s","*":"m","/":"d"};
-var OK = 70, BAD = 60, MIN = 5, MINOP = 8;     /* 判断に つかう しきい値 */
+var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+
+/* 判断に つかう しきい値。少ない問題数で 言い切らない ための 決めごと。 */
+var OK   = 70,   /* これ未満＝土台が あやしい */
+    BAD  = 60,   /* これ未満＝にがて */
+    HIGH = 85,   /* これ以上＝型は 分かっている */
+    MIN  = 6,    /* 単元の 話を するのに 要る 問題数 */
+    SURE = 12,   /* これ以上 あれば「めやす」と 断らない */
+    MINOP= 8,    /* 演算べつの 話を するのに 要る 問題数 */
+    MINSP= 4,    /* 型を 2つに 割って くらべるのに 要る 片がわの 数 */
+    GAP  = 25;   /* 「ここで 落ちる」と 言える 差（%） */
+
+/* ---- 計算問題の「型」の 印（プリント側で つけている） ----
+   l=文の中の 言い方  s=見出しの 言い方  u=その型だけを 出す URL の おまけ */
+var FEAT = {
+  c:{l:"くり上がり・くり下がりが ある",   s:"くり上がり・くり下がり", u:"&cy=only"},
+  z:{l:"0から 借りる（空位を またぐ）",   s:"0から 借りる ひき算"},
+  r:{l:"あまりが 出る",                  s:"あまりの ある わり算", u:"&dm=rem"},
+  w:{l:"かける数・わる数が 2けた（小数）", s:"2けたを かける・わる",  u:"&db=2"},
+  k:{l:"小数点の 位が そろわない",        s:"小数点の 位そろえ"},
+  n:{l:"答えの 末尾の 0 を 消す",         s:"末尾の 0 の しまつ"},
+  t:{l:"分母が ちがう（通分が 要る）",     s:"通分",                 u:"&fd=diff"},
+  y:{l:"約分が 要る",                    s:"約分"},
+  m:{l:"答えが 帯分数に なる",            s:"仮分数を 帯分数に する"},
+  L:{l:"□が 左（ぎゃくに もどして 考える）", s:"□が 左の 虫食い算"},
+  R:{l:"□が 右",                        s:"□が 右の 虫食い算"},
+  p:{l:"かっこが ある",                  s:"かっこ"},
+  d:{l:"÷が まざる",                    s:"÷の まざった 式"},
+  g:{l:"答えが マイナスに なる",          s:"答えが マイナス"},
+  b:{l:"うしろの 数が マイナス",          s:"マイナスを ひく・かける"}
+};
+/* ---- 文章題・図形の「型」 ---- */
+var TID = {
+  awase:"あわせて いくつ", morau:"ふえる・もらう", nokori:"のこりは いくつ",
+  chigai:"ちがいは いくつ", bai:"何ばい", toubun:"同じ数ずつ 分ける",
+  amari:"分けて あまりを 出す", oturi:"おつり", ni_kai:"2だんかいの 問題",
+  ni_nokori:"2だんかい（のこり）",
+  ato:"何分後の 時こく", aida:"あいだの 時間", tsuku:"つく 時こく", mae:"何分前の 時こく",
+  nedan:"1こあたりの ねだん", hanadan:"1mあたりの ねだん", nenpi:"1Lで 走る 道のり",
+  komi:"こみぐあい（1あたりで くらべる）",
+  michi:"道のりを もとめる", hayasa:"速さを もとめる", jikan:"時間を もとめる",
+  fun:"分に なおす", bunsoku:"分速に なおす",
+  biki:"◯%引きの ねだん", nanpa:"何%に あたるか", moto:"もとの 数を もとめる",
+  mashi:"◯%増しの 数", kurabe:"割合で くらべる",
+  heikin:"平均を もとめる", goukei:"合計から もどす", ochi:"1つ 落ちた ときの 平均",
+  omosa:"分数の 重さ", waru:"分数で わる", f_awase:"分数を あわせる", f_nokori:"分数の のこり",
+  wakeru:"比で 分ける", kataho:"かたほうを もとめる", kantan:"かんたんな 比に する",
+  narabe:"ならべ方", erabu:"えらび方", sougo:"組み合わせ", coin:"コインの 表うら", junban:"じゅんばん",
+  daikin:"代金の 式を 立てる", kabusoku:"過不足の 式を 立てる",
+  nenrei:"年れいの 式を 立てる", renzoku:"連続する 数",
+  perim:"まわりの 長さを もとめる", perim_side:"まわりの 長さから 辺を もとめる",
+  rect_area:"面積を もとめる", rect_side:"面積から 辺を もとめる", rect_square:"正方形の 面積",
+  tri_h:"面積から 高さを もとめる", para_h:"平行四辺形の 高さ",
+  at1:"三角形の 面積", at2:"平行四辺形の 面積", at3:"台形の 面積", at4:"ひし形の 面積",
+  at5:"三角形の 面積（形ちがい）", at6:"四角形の 面積（形ちがい）",
+  circum:"円周を もとめる", circum_d:"円周から 直径を もとめる",
+  acirc:"円の 面積", acirc_r:"面積から 半径を もとめる",
+  vol5:"体積を もとめる", vol5_h:"体積から 高さを もとめる"
+};
+
+var TIDC = {                 /* 型の 名まえ → 2文字。QR を 紙に のる 大きさに するため */
+  acirc:"00", acirc_r:"01", aida:"02", amari:"03", at1:"04",
+  at2:"05", at3:"06", at4:"07", at5:"08", at6:"09",
+  ato:"0a", awase:"0b", bai:"0c", biki:"0d", bunsoku:"0e",
+  chigai:"0f", circum:"0g", circum_d:"0h", coin:"0i", daikin:"0j",
+  erabu:"0k", f_awase:"0l", f_nokori:"0m", fun:"0n", goukei:"0o",
+  hanadan:"0p", hayasa:"0q", heikin:"0r", jikan:"0s", junban:"0t",
+  kabusoku:"0u", kantan:"0v", kataho:"0w", komi:"0x", kurabe:"0y",
+  mae:"0z", mashi:"10", michi:"11", morau:"12", moto:"13",
+  nanpa:"14", narabe:"15", nedan:"16", nenpi:"17", nenrei:"18",
+  ni_kai:"19", ni_nokori:"1a", nokori:"1b", ochi:"1c", omosa:"1d",
+  oturi:"1e", para_h:"1f", perim:"1g", perim_side:"1h", rect_area:"1i",
+  rect_side:"1j", rect_square:"1k", renzoku:"1l", sougo:"1m", toubun:"1n",
+  tri_h:"1o", tsuku:"1p", vol5:"1q", vol5_h:"1r", wakeru:"1s",
+  waru:"1t"
+};
+var TIDN = {}; for(var _t in TIDC) if(TIDC.hasOwnProperty(_t)) TIDN[TIDC[_t]] = _t;
 
 function rate(x){ return x.n ? Math.round(x.ok/x.n*100) : 0; }
+function nameOf(id){ return (U[id] && U[id].ja) || id; }
+function isCalc(id){ return !U[id] || U[id].c==="calc"; }
+/* すすめる 問題数は、その 単元の 出しかたで 実際に えらべる 数に あわせる */
+function nFor(id){ return (U[id] && U[id].c==="calc") ? 20 : 12; }
+function linkTo(id, g, extra){
+  var u = U[id]; if(!u) return null;
+  var gg = g && u.g.indexOf(g)>=0 ? g : u.g[u.g.length-1];
+  return "./index.html?g="+gg+"&u="+encodeURIComponent(id)+(extra||"");
+}
+/* プリントの むずかしさ（h32r＝ひっ算・3けたと2けた・あまりあり）を 日本語に */
+function profJa(p){
+  if(!p) return "";
+  var m = /^([a-z])(\d)(\d)([rnot]*)$/.exec(String(p));
+  if(!m) return "";
+  var bits = [], t = {y:"よこ式", h:"ひっ算", b:"", m:"100マス"}[m[1]];
+  if(t) bits.push(t);
+  if(+m[2] && +m[3]) bits.push(m[2]+"けたと "+m[3]+"けた");
+  if(m[4].indexOf("r")>=0) bits.push("あまりあり");
+  if(m[4].indexOf("n")>=0) bits.push("くり上がりなし");
+  if(m[4].indexOf("o")>=0) bits.push("くり上がりあり");
+  if(m[4].indexOf("t")>=0) bits.push("分母ちがい");
+  return bits.join("・");
+}
+
 /* 学年を またいで 単元ごとに まとめる。
    演算（＋－×÷）の 集計は 整数と 虫食い算だけ。分数の × などを 混ぜると
    「かけ算が 弱い」と 見まちがえるため。 */
 function rollup(recs){
-  var byU = {}, byOp = {}, seq = {};
+  var byU = {}, byOp = {}, seq = {}, qs = {};
   recs.forEach(function(r){
     (r.perQ||[]).forEach(function(q){
       var u = byU[q.unit] || (byU[q.unit] = {n:0, ok:0, ja:q.unitJa||(U[q.unit]&&U[q.unit].ja)||q.unit, g:q.grade});
       u.n++; if(q.ok) u.ok++; if(q.grade>u.g) u.g = q.grade;
       (seq[q.unit] || (seq[q.unit] = [])).push(q.ok ? 1 : 0);
+      (qs[q.unit] || (qs[q.unit] = [])).push({ok:q.ok, sub:q.sub||"", op:q.op||"", prof:r.prof||""});
       if(q.op && (q.unit==="int" || q.unit==="hole")){
         var o = byOp[q.op] || (byOp[q.op] = {n:0, ok:0});
         o.n++; if(q.ok) o.ok++;
       }
     });
   });
-  return {byU:byU, byOp:byOp, seq:seq};
+  return {byU:byU, byOp:byOp, seq:seq, qs:qs};
 }
 function trend(list){
   if(list.length < 12) return null;
@@ -580,29 +705,126 @@ function trend(list){
   var f = function(x){ return Math.round(x.reduce(function(p,q){return p+q;},0)/x.length*100); };
   return {from:f(a), to:f(b)};
 }
-function linkTo(id, g, extra){
-  var u = U[id]; if(!u) return null;
-  var gg = g && u.g.indexOf(g)>=0 ? g : u.g[u.g.length-1];
-  return "./index.html?g="+gg+"&u="+encodeURIComponent(id)+(extra||"");
-}
-function nameOf(id){ return (U[id] && U[id].ja) || id; }
 
-/* 見立て。にがてな 単元を 見つけたら、その 手前を たどって
-   いちばん 奥で 崩れている ところ（＝直すべき 場所）を 指す。 */
+/* ==========================================================
+   どの「型」で 割れているか
+   正答率だけでは「何が できていないか」は 言えない。
+   同じ単元の 中で、くり上がりの ある/なし、通分の 要る/要らない…
+   と 2つに 割って くらべ、はっきり 差が つく ところを 探す。
+   ========================================================== */
+var FEATU = {                               /* 単元に よって 言い方を 変える */
+  dec:{ w:{l:"小数を かける・小数で わる", s:"小数×小数・小数÷小数"} },
+  int:{ w:{l:"かける数・わる数が 2けた",   s:"2けたを かける・わる", u:"&db=2"} },
+  hole:{w:{l:"かける数・わる数が 2けた",   s:"2けたを かける・わる", u:"&db=2"} }
+};
+function featOf(id,c){ return (FEATU[id] && FEATU[id][c]) || FEAT[c]; }
+function splitOf(list, id){
+  var best = null, i;
+  if(isCalc(id)){
+    var seen = {};
+    list.forEach(function(q){ q.sub.split("").forEach(function(c){ if(FEAT[c]) seen[c] = 1; }); });
+    Object.keys(seen).forEach(function(c){
+      var a = {n:0,ok:0}, b = {n:0,ok:0};
+      list.forEach(function(q){ var t = q.sub.indexOf(c)>=0 ? a : b; t.n++; if(q.ok) t.ok++; });
+      if(a.n<MINSP || b.n<MINSP) return;
+      var gap = rate(b) - rate(a);
+      if(gap>=GAP && rate(a)<OK && (!best || gap>best.gap)){
+        var F = featOf(id,c);
+        best = {l:F.l+"もの", s:F.s, url:F.u||"", other:"そうでない もの", gap:gap, hard:a, easy:b};
+      }
+    });
+    return best;
+  }
+  var g = {};
+  list.forEach(function(q){ if(!q.sub || !TID[q.sub]) return;
+    var t = g[q.sub] || (g[q.sub] = {n:0,ok:0}); t.n++; if(q.ok) t.ok++; });
+  var ks = Object.keys(g).filter(function(k){ return g[k].n>=MINSP; });
+  if(ks.length<2) return null;
+  ks.sort(function(x,y){ return rate(g[x]) - rate(g[y]); });
+  var lo = ks[0], hi = ks[ks.length-1];
+  if(rate(g[lo])>=OK || rate(g[hi])-rate(g[lo])<GAP) return null;
+  return {l:"「"+TID[lo]+"」型", s:"「"+TID[lo]+"」型", url:"",
+          other:"「"+TID[hi]+"」型", gap:rate(g[hi])-rate(g[lo]), hard:g[lo], easy:g[hi]};
+}
+/* けた数など、プリントの 設定で 割れているか */
+function wallOf(list){
+  var g = {};
+  list.forEach(function(q){ if(!profJa(q.prof)) return;
+    var t = g[q.prof] || (g[q.prof] = {n:0,ok:0}); t.n++; if(q.ok) t.ok++; });
+  var ks = Object.keys(g).filter(function(k){ return g[k].n>=MINSP+2; });
+  if(ks.length<2) return null;
+  ks.sort(function(x,y){ return rate(g[x]) - rate(g[y]); });
+  var lo = ks[0], hi = ks[ks.length-1];
+  if(rate(g[lo])>=OK || rate(g[hi])-rate(g[lo])<GAP) return null;
+  return {hard:profJa(lo), easy:profJa(hi), hardR:rate(g[lo]), easyR:rate(g[hi]),
+          hardN:g[lo].n, easyN:g[hi].n};
+}
+/* 1枚の 後半で 落ちて いないか（集中・時間の 話。理解とは 分けて 見る）
+   後半に 難しい型が かたまって いると、前半後半を そのまま くらべては いけない。
+   同じ型の 中で 前半と 後半の 差を 出し、それを 重みつきで ならす。 */
+function stamina(recs){
+  var by = {};
+  recs.forEach(function(r){
+    var q = r.perQ || [];
+    if(q.length<8) return;
+    var h = Math.floor(q.length/2);
+    q.forEach(function(x,i){
+      var k = x.unit + "/" + (x.sub||"");
+      var v = by[k] || (by[k] = {fn:0, fo:0, bn:0, bo:0});
+      if(i<h){ v.fn++; if(x.ok) v.fo++; } else { v.bn++; if(x.ok) v.bo++; }
+    });
+  });
+  var num = 0, den = 0, fN = 0, fO = 0, bN = 0, bO = 0;
+  Object.keys(by).forEach(function(k){
+    var v = by[k], w;
+    if(v.fn<3 || v.bn<3) return;                       /* 前後 どちらにも 3問以上 ある型だけ */
+    w = Math.min(v.fn, v.bn);
+    num += w * (v.fo/v.fn - v.bo/v.bn);
+    den += w;
+    fN += v.fn; fO += v.fo; bN += v.bn; bO += v.bo;
+  });
+  if(den<10 || fN<15 || bN<15) return null;
+  var d = Math.round(num/den*100);
+  return d>=15 ? {front:Math.round(fO/fN*100), back:Math.round(bO/bN*100), n:fN+bN, gap:d} : null;
+}
+
+/* 学年ごとの 通りぐあい（現在地） */
+function ladder(recs){
+  var g = {};
+  recs.forEach(function(r){ (r.perQ||[]).forEach(function(q){
+    if(!GRN[q.grade]) return;
+    var x = g[q.grade] || (g[q.grade] = {n:0,ok:0}); x.n++; if(q.ok) x.ok++;
+  }); });
+  var gs = Object.keys(g).map(Number).sort(function(a,b){ return a-b; })
+             .filter(function(k){ return g[k].n>=MIN; });
+  var done = [], stuck = null, i;
+  for(i=0;i<gs.length;i++){
+    if(rate(g[gs[i]])>=HIGH) done.push(gs[i]);
+    else if(rate(g[gs[i]])<OK && stuck===null) stuck = gs[i];
+  }
+  return {g:g, gs:gs, done:done, stuck:stuck};
+}
+
+/* ==========================================================
+   見立て
+   ならべる 順は「土台が 先」。
+   1 整数の ＋−×÷ の 穴 → 2 前提の さかのぼり → 3 型の 割れ
+   → 4 けたの 壁 → 5 後半で 落ちる → 6 のび → 7 まだの 単元
+   それぞれ「見えたこと（数）→ どう 読むか → 何を するか」で 書く。
+   ========================================================== */
 function advise(recs){
-  var R = rollup(recs), byU = R.byU, byOp = R.byOp;
+  var R = rollup(recs), byU = R.byU, byOp = R.byOp, QS = R.qs;
   var out = [], done = {}, ids = Object.keys(byU), total = 0;
   ids.forEach(function(id){ total += byU[id].n; });
   function ok(id){ return byU[id] && byU[id].n>=MIN; }
-  function shaky(id){ return ok(id) && rate(byU[id])<OK; }     /* 70%未満＝あやしい */
+  function shaky(id){ return ok(id) && rate(byU[id])<OK; }
+  function thin(id){ return byU[id] && byU[id].n<SURE; }
   function push(it){ if(!done[it.key]){ done[it.key]=1; out.push(it); } }
   /* 手前を たどって、いちばん 奥の あやしい ところ */
   function root(id, depth){
     var pres = PRE[id] || [], i;
     if(depth>4) return null;
-    for(i=0;i<pres.length;i++){
-      if(shaky(pres[i])) return root(pres[i], depth+1) || pres[i];
-    }
+    for(i=0;i<pres.length;i++){ if(shaky(pres[i])) return root(pres[i], depth+1) || pres[i]; }
     return null;
   }
   function firstUntouched(id){
@@ -610,82 +832,203 @@ function advise(recs){
     for(i=0;i<pres.length;i++) if(!byU[pres[i]]) return pres[i];
     return null;
   }
+  /* 単元の 中の 型の 割れを ひとこと に する */
+  function splitLine(id){
+    var sp = splitOf(QS[id]||[], id);
+    if(!sp) return null;
+    sp.text = "とくに "+sp.l+"で "+rate(sp.hard)+"%（"+sp.hard.ok+"/"+sp.hard.n+"問）。"
+      + sp.other+"は "+rate(sp.easy)+"%（"+sp.easy.ok+"/"+sp.easy.n+"問）。";
+    sp.clean = rate(sp.easy) >= HIGH;      /* かんたんな 側が とれて いれば 土台は 無事 */
+    return sp;
+  }
+  function sheetFor(id, sp){
+    return linkTo(id, byU[id] && byU[id].g, "&n="+nFor(id)+((sp && sp.url) || ""));
+  }
 
-  /* 1) 整数の ＋－×÷ の うち、1つだけ 落ちていないか */
+  /* 1) 整数の ＋−×÷ の うち 1つだけ 落ちていないか */
   var ops = Object.keys(byOp).filter(function(o){ return byOp[o].n>=MINOP; });
   if(ops.length>=2){
     ops.sort(function(a,b){ return rate(byOp[a]) - rate(byOp[b]); });
     var lo = ops[0], hi = ops[ops.length-1];
     if(rate(byOp[lo])<OK && rate(byOp[hi])-rate(byOp[lo])>=15){
       done["u:int"] = 1;
-      push({key:"op"+lo, tone:"base", unit:"int",
-        title:"整数の "+OPNAME[lo]+"を 集中して やる",
-        why:"整数の "+OPNAME[lo]+"が "+rate(byOp[lo])+"%（"+byOp[lo].ok+"/"+byOp[lo].n+"問）。"
-          + "ほかの 計算は "+rate(byOp[hi])+"% なので、ここだけ 抜けています。"
-          + "分数・割合・方程式は すべて この上に のっています。",
+      var sl = splitLine("int");
+      push({key:"op"+lo, tone:"base", unit:"int", soft:byOp[lo].n<SURE,
+        title:"整数の "+OPNAME[lo]+"を 立て直す",
+        obs:"整数の "+OPNAME[lo]+"が "+rate(byOp[lo])+"%（"+byOp[lo].ok+"/"+byOp[lo].n+"問）。"
+          + "ほかの 計算は "+rate(byOp[hi])+"%。"+(sl ? sl.text : ""),
+        why:"1つの 演算だけ 落ちる ときは、その 手つづきが まだ 身に ついて いません。"
+          + "分数も 割合も 方程式も この上に のって いるので、先に ここを 通します。",
+        todo:OPNAME[lo]+"だけの プリントを 20問。"
+          + (sl ? sl.s+"を 中心に、" : "")+"3日 つづけて 8割を こえたら 次へ。",
         link:linkTo("int", byU.int && byU.int.g,
           "&o="+OPCODE[lo]+"&da=2&db=1&n=20"+(lo==="/" ? "&dm=rem" : "")),
         label:OPNAME[lo]+"だけ 出す"});
     }
   }
-  /* 2) にがてな 単元（60%未満）を 出来ない 順に。手前が 崩れていれば 手前を 指す */
-  ids.filter(function(id){ return ok(id) && rate(byU[id])<BAD; })
-     .sort(function(a,b){ return rate(byU[a]) - rate(byU[b]); })
-     .forEach(function(id){
-    if(done["u:"+id]) return;
-    var rc = root(id,0);
-    if(rc){
-      done["u:"+id] = 1; done["u:"+rc] = 1;
-      push({key:"root"+rc, tone:"base", unit:rc,
-        title:nameOf(rc)+"から。"+nameOf(id)+"は そのあと",
-        why:nameOf(id)+"が "+rate(byU[id])+"% ですが、その 土台の "+nameOf(rc)+"も "
-          + rate(byU[rc])+"% です。先に こちらを 通すほうが、遠回りに 見えて 近道です。",
-        link:linkTo(rc, byU[rc].g, "&n="+nFor(rc)), label:nameOf(rc)+"を つくる"});
-      return;
-    }
-    var nt = firstUntouched(id);
-    if(nt){
-      done["u:"+id] = 1;
-      push({key:"try"+nt, tone:"base", unit:nt,
-        title:nameOf(nt)+"を 先に ためす",
-        why:nameOf(id)+"が "+rate(byU[id])+"%。その 土台の "+nameOf(nt)
-          + "は まだ 1問も といていません。そこが できているか 先に 見ると、原因が はっきりします。",
-        link:linkTo(nt, null, "&n="+nFor(nt)), label:nameOf(nt)+"を ためす"});
-      return;
-    }
-    done["u:"+id] = 1;
-    var basic = BASIC.indexOf(id)>=0;
-    push({key:"weak"+id, tone: basic ? "base" : "weak", unit:id,
-      title:nameOf(id)+"を もう1枚",
-      why:nameOf(id)+"が "+rate(byU[id])+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"
-        + (basic ? "ここは この先 ずっと つかう ところなので、先に 立て直すのが 早道です。"
-                 : "土台の 単元は とれているので、この単元を くり返すのが 効きます。"),
-      link:linkTo(id, byU[id].g, "&n="+nFor(id)), label:"もう1枚 つくる"});
+
+  /* 2) 手当てが 要る 単元を 一度に 見る。
+        にがて（60%未満）か、型で はっきり 割れて いる ところ。
+        ならべる 順は 土台の 単元が 先、つぎに 落ちて いる 順。 */
+  var need = ids.filter(function(id){
+    if(!ok(id)) return false;
+    if(rate(byU[id])<BAD) return true;
+    var sp = splitLine(id);
+    return !!(sp && rate(sp.hard)<BAD);            /* 全体は ふつうでも 一部が 崩れて いる */
+  }).sort(function(a,b){
+    /* 土台の 単元が 先。土台どうしは 整数→小数→分数 の 順（前提の 順）。
+       そのほかは 落ちて いる 順。 */
+    var ia = BASIC.indexOf(a), ib = BASIC.indexOf(b);
+    if(ia>=0 && ib>=0) return ia - ib;
+    if(ia>=0) return -1;
+    if(ib>=0) return 1;
+    return rate(byU[a]) - rate(byU[b]);
   });
-  /* 3) 60〜70%の 土台単元も、ほかに 言うことが 少なければ 拾う */
-  if(out.length<2){
+
+  /* どの 単元が どの 単元の 足を ひっぱって いるか（両方 崩れて いる ときだけ） */
+  var blocks = {};
+  need.forEach(function(id){
+    var rc = root(id,0);
+    if(rc) (blocks[rc] || (blocks[rc] = [])).push(id);
+  });
+  function upper(id){
+    var b = (blocks[id]||[]).filter(function(y){ return !done["u:"+y] && y!==id; });
+    b.forEach(function(y){ done["u:"+y] = 1; });
+    if(!b.length) return null;
+    return {ids:b,
+      tail:"（"+b.map(nameOf).join("・")+"は そのあと）",
+      why:b.map(nameOf).join("・")+"が "+b.map(function(y){ return rate(byU[y])+"%"; }).join("・")
+        + "で 止まって いるのは、ここが ゆれて いるからです。"
+        + "上を 先に やっても、どこで まちがえたのか 本人にも 分からなく なります。"
+        + "遠回りに 見えて、こちらが 近道です。",
+      todo:"8割を こえてから "+b.map(nameOf).join("・")+"に もどります。"};
+  }
+
+  need.forEach(function(id){
+    if(done["u:"+id]) return;
+    var sp = splitLine(id), up = upper(id), base = BASIC.indexOf(id)>=0;
+    /* 2a) 型で はっきり 割れて いる → そこだけを 名ざす */
+    if(sp){
+      done["u:"+id] = 1;
+      push({key:"split"+id, tone: base||up ? "base" : "weak", unit:id, soft:thin(id),
+        title:nameOf(id)+" ― "+sp.s+"で 止まって いる"+(up ? up.tail : ""),
+        obs:nameOf(id)+"は ぜんたいで "+rate(byU[id])+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"+sp.text,
+        why:(sp.clean
+              ? "かんたんな 側が "+rate(sp.easy)+"% とれて いるので、単元 まるごとが"
+                + " 分かって いない わけでは ありません。"
+              : "")
+          + "落ちて いるのは この ひと手間 だけです。単元を まるごと やり直すより、"
+          + "ここを 取り出して やる ほうが 早く、本人も «何が できる ように なったか» が 分かります。"
+          + (up ? " " + up.why : ""),
+        todo:sp.s+"の 問題を "+nFor(id)+"問。"
+          + (sp.url ? "リンクは その型だけを 出す ように して あります。"
+                    : "できた ものに ○を つけて、型を 目で 見せると 効きます。")
+          + " 8割を こえたら、ほかの 型と 混ぜて もう1枚。" + (up ? " " + up.todo : ""),
+        link:sheetFor(id, sp), label:sp.s+"を 出す"});
+      return;
+    }
+    /* 2b) 手前を まだ といて いない → まず そこを ためす */
+    var nt = firstUntouched(id);
+    if(nt && !up){
+      done["u:"+id] = 1;
+      push({key:"try"+nt, tone:"base", unit:nt, soft:thin(id),
+        title:nameOf(nt)+"を 先に ためす",
+        obs:nameOf(id)+"が "+rate(byU[id])+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"
+          + "落ち方は 型に よらず ばらけて います。"
+          + "その 土台の "+nameOf(nt)+"は まだ 1問も といて いません。",
+        why:"ここが できて いるかで、手当ての 場所が 変わります。"
+          + "できて いれば "+nameOf(id)+"の やり方の 問題、できて いなければ 土台の 問題です。"
+          + "分からない まま 数を こなすのが いちばん もったいない。",
+        todo:nameOf(nt)+"を "+nFor(nt)+"問だけ ためして、結果で 決めます。",
+        link:linkTo(nt, byU[id].g, "&n="+nFor(nt)), label:nameOf(nt)+"を ためす"});
+      return;
+    }
+    /* 2c) 型でも 割れず、土台も とれて いる → 数を こなす 段階 */
+    done["u:"+id] = 1;
+    var r0 = rate(byU[id]);
+    push({key:"weak"+id, tone: base||up ? "base" : (r0>=HIGH ? "care" : "weak"),
+      unit:id, soft:thin(id),
+      title:(r0>=HIGH ? nameOf(id)+"は あと 少し（見直しの ぶん）" : nameOf(id)+"を もう1枚")
+        + (up ? up.tail : ""),
+      obs:nameOf(id)+"が "+r0+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"
+        + "落ち方は 型に よらず ばらけて います。",
+      why: (r0>=HIGH
+        ? "型で 割れて いないので、やり方は 分かって います。落として いるのは 見直しで 拾える ぶんです。"
+        : (base ? "ここは この先 ずっと つかう ところです。型で 割れて いないので、"
+                + "やり方は 分かって いて 手が まだ 慣れて いない 段階です。"
+                : "土台の 単元は とれて います。この単元の 手つづきを くり返すのが 効きます。"))
+        + (up ? " " + up.why : ""),
+      todo:(r0>=HIGH
+        ? "数を 増やすより、1枚を 半分に して 見直しの 時間を とります。"
+        : nameOf(id)+"を "+nFor(id)+"問。1回の 数を 半分に して、そのぶん ていねいに。")
+        + (up ? " " + up.todo : ""),
+      link:sheetFor(id, null), label:"もう1枚 つくる"});
+  });
+
+  /* 3) 後半で 落ちて いないか（理解では なく 集中・時間の 話）。
+        これが 効いて いる ときは、単元の 正答率を「慣れて いない」と 読んでは いけない。 */
+  var st = stamina(recs);
+  if(st) push({key:"stamina", tone:"care", unit:null, soft:false,
+    title:"後半で 落ちて いる",
+    obs:"1枚の 前半 "+st.front+"%、後半 "+st.back+"%（同じ型どうしで くらべて "+st.n+"問）。"
+      + "差が "+st.gap+"ポイント。",
+    why:"前半と 後半で 同じ型の 問題を くらべて この差が つくのは、"
+      + "やり方が 分からない ためでは ありません。集中が 切れる か、急いで いるか、"
+      + "1枚が 長すぎる かの どれかです。正答率だけ 見て「にがて」と 決めると 見まちがえます。",
+    todo:"問題の 数を 半分に して 2回に 分ける。"
+      + "または 時間を 計って「早く」より「ぜんぶ 合う」を めあてに します。"});
+
+  /* 4) 60〜70%の 土台単元。ほかに 言うことが 少なければ 拾う */
+  if(out.length<2 && !st){
     BASIC.forEach(function(id){
       if(done["u:"+id] || !shaky(id)) return;
-      var up = trend(R.seq[id]);                   /* のびている 途中なら せかさない */
-      if(up && up.to - up.from >= 20) return;
+      var up = trend(R.seq[id]);
+      if(up && up.to - up.from >= 20) return;              /* のびている 途中なら せかさない */
       done["u:"+id] = 1;
-      push({key:"basic"+id, tone:"base", unit:id,
-        title:nameOf(id)+"を もう少し",
-        why:nameOf(id)+"が "+rate(byU[id])+"%。あと ひと押しで 土台が かたまります。",
-        link:linkTo(id, byU[id].g, "&n="+nFor(id)), label:"もう1枚 つくる"});
+      var sp = splitLine(id);
+      push({key:"basic"+id, tone:"base", unit:id, soft:thin(id),
+        title: sp ? nameOf(id)+" ― "+sp.s+"が 弱い" : nameOf(id)+"を もう少し",
+        obs:nameOf(id)+"が "+rate(byU[id])+"%（"+byU[id].ok+"/"+byU[id].n+"問）。"+(sp ? sp.text : ""),
+        why:"あと ひと押しで 土台が かたまります。ここが 8割を こえると、"
+          + "上の 単元の つまずきが はっきり 減ります。",
+        todo:nameOf(id)+"を "+nFor(id)+"問。"+(sp ? sp.s+"を 多めに。" : ""),
+        link:sheetFor(id, sp), label:"もう1枚 つくる"});
     });
   }
-  var weakCount = out.length;
-  /* 4) のびている ところ */
+
+  /* 5) けたが 増えると 落ちる（プリントの 設定で くらべる） */
   ids.forEach(function(id){
+    if(out.length>=6 || !ok(id) || done["u:"+id]) return;
+    var w = wallOf(QS[id]||[]);
+    if(!w) return;
+    push({key:"wall"+id, tone:"weak", unit:id, soft:false,
+      title:nameOf(id)+"は けたが 増えると 落ちる",
+      obs:nameOf(id)+"は「"+w.easy+"」なら "+w.easyR+"%（"+w.easyN+"問）、"
+        + "「"+w.hard+"」だと "+w.hardR+"%（"+w.hardN+"問）。",
+      why:"やり方は 分かって います。落ちるのは けたが 増えて"
+        + " 手順が 長く なる ところ。ここは 理解より 手の 慣れの 話です。",
+      todo:"「"+w.easy+"」で 8割を たもったまま、けたを 1つ だけ 上げて 20問。"
+        + "いきなり 難しい ほうへ 飛ばさない。",
+      link:linkTo(id, byU[id].g, "&n="+nFor(id)), label:nameOf(id)+"を つくる"});
+  });
+
+  var weakCount = out.length;
+
+  /* 6) のびている ところ */
+  ids.forEach(function(id){
+    if(done["u:"+id]) return;               /* 手当てを すすめた 単元を ほめると ちぐはぐに なる */
     var t = trend(R.seq[id]);
     if(t && t.to - t.from >= 20 && t.to >= OK)
-      push({key:"up"+id, tone:"good", unit:id,
-        title:nameOf(id)+"は のびています",
-        why:"はじめの ころ "+t.from+"% → さいきん "+t.to+"%。ここは 手を ゆるめて 大丈夫です。"});
+      push({key:"up"+id, tone:"good", unit:id, soft:false,
+        title:nameOf(id)+"は のびて います",
+        obs:"はじめの ころ "+t.from+"% → さいきん "+t.to+"%。",
+        why:"やり方が 手に 入った ところです。ここで 数を 増やすより、"
+          + "少し 難しい ものを 混ぜる ほうが 伸びます。",
+        todo:"今の ままで だいじょうぶ。手を ゆるめて、ほかの 単元に 時間を 回します。"});
   });
-  /* 5) つまずきが 見あたらない ときだけ、まだの 単元を すすめる（基礎の 順に） */
-  if(!weakCount){
+
+  /* 7) つまずきが 見あたらない ときだけ、まだの 単元を すすめる（基礎の 順に） */
+  if(!weakCount && total>=12){
     var gs = {}; ids.forEach(function(id){ gs[byU[id].g] = 1; });
     var g = Object.keys(gs).map(Number).sort(function(a,b){return a-b;}).pop();
     var order = ["int","hole","dec","frac","mixed","divisor","unit","ratioc","hi","letter","prop","neg","eq"];
@@ -695,24 +1038,27 @@ function advise(recs){
           var ia = order.indexOf(a), ib = order.indexOf(b);
           return (ia<0?99:ia) - (ib<0?99:ib);
         });
-      if(rest.length) push({key:"rest", tone:"info", unit:rest[0],
+      if(rest.length) push({key:"rest", tone:"info", unit:rest[0], soft:false,
         title:"つぎは "+nameOf(rest[0])+"を ためす",
-        why:({3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"}[g])+"で まだ といていない 単元が "
-          + rest.length+"つ あります（"+rest.slice(0,3).map(nameOf).join("・")
-          + (rest.length>3 ? " ほか" : "")+"）。ひととおり 見ておくと 穴が わかります。",
+        obs:GRN[g]+"で まだ といて いない 単元が "+rest.length+" あります（"
+          + rest.slice(0,3).map(nameOf).join("・")+(rest.length>3 ? " ほか" : "")+"）。",
+        why:"いまの ところ 大きな つまずきは 見えません。"
+          + "ひととおり 触って おくと、穴が あるか どうかが はっきりします。",
+        todo:nameOf(rest[0])+"を "+nFor(rest[0])+"問。",
         link:linkTo(rest[0], g, "&n="+nFor(rest[0])), label:nameOf(rest[0])+"を ためす"});
     }
   }
-  return {items:out, total:total, byOp:byOp, weak:weakCount};
+  return {items:out, total:total, byOp:byOp, weak:weakCount, ladder:ladder(recs)};
 }
 
-/* ---------- 分析 ---------- */
+
 function analyse(records){
   var byUnit = {}, byGrade = {}, i, j;
   records.forEach(function(r){
     (r.perQ||[]).forEach(function(q){
       var key = q.unit + "@" + q.grade;
-      var u = byUnit[key] || (byUnit[key] = {id:q.unit, ja:q.unitJa||q.unit, n:0, ok:0, g:q.grade});
+      var u = byUnit[key] || (byUnit[key] = {id:q.unit,
+        ja:q.unitJa || (U[q.unit] && U[q.unit].ja) || q.unit, n:0, ok:0, g:q.grade});
       u.n++; if(q.ok) u.ok++;
       var g = byGrade[q.grade] || (byGrade[q.grade] = {n:0, ok:0, units:{}});
       g.n++; if(q.ok) g.ok++; g.units[q.unit] = 1;
@@ -749,26 +1095,52 @@ function viewAna(){
     + '</div></div>';
 
   /* --- 見立て（基礎が 先） --- */
-  var ad = advise(recs);
-  h += '<div class="card"><h2>つぎに やると よいこと <em>基礎から 順に</em></h2>';
-  if(ad.total < 20){
-    h += '<p class="muted">まだ '+ad.total+'問です。あと '+(20-ad.total)
-      + '問ほど とくと、どこで つまずいているか 見えてきます。</p>';
+  var ad = advise(recs), L = ad.ladder;
+
+  /* いまの ところ：どの学年まで 通っていて、どこで 止まっているか */
+  var lad = "";
+  if(L.gs.length){
+    lad = L.gs.map(function(g){
+      return GRN[g]+" "+rate(L.g[g])+"%（"+L.g[g].n+"問）";
+    }).join("　/　");
+  }
+  h += '<div class="card"><h2>見立て <em>プロの 見かたで、土台から 順に</em></h2>';
+  h += '<p class="lead">'+esc(
+        "といた 問題は ぜんぶで "+ad.total+"問。"
+        + (lad ? "学年べつでは "+lad+"。" : "")
+        + (L.done.length ? L.done.map(function(g){return GRN[g];}).join("・")+"は 通って います。" : "")
+        + (L.stuck!==null ? GRN[L.stuck]+"が いまの 山です。" : "")
+      )+'</p>';
+  if(ad.total < 12){
+    h += '<p class="muted">まだ '+ad.total+'問です。この数では、どこで つまずいて いるかは 分かりません。'
+      + 'あと '+(20-ad.total)+'問ほど（1〜2枚）とくと、型べつに 分けて 見られる ように なります。</p>'
+      + '</div>';
+  } else {
+  if(ad.total < 24){
+    h += '<p class="muted">ただし まだ '+ad.total+'問です。あと '+(24-ad.total)
+      + '問ほど とくまでは、下の 見立ては 仮の ものと して 読んで ください。</p>';
   }
   if(ad.items.length){
     h += '<ol class="advice">';
     ad.items.slice(0,4).forEach(function(it){
-      h += '<li class="'+it.tone+'"><b>'+esc(it.title)+'</b><p>'+esc(it.why)+'</p>'
-        + (it.link ? '<a href="'+it.link+'">'+esc(it.label)+'</a>' : '')+'</li>';
+      h += '<li class="'+it.tone+'"><b>'+esc(it.title)
+         + (it.soft ? '<i class="soft">まだ 少ない ので めやす</i>' : '')+'</b>'
+         + '<p class="obs"><span>見えたこと</span>'+esc(it.obs)+'</p>'
+         + '<p class="why"><span>どう 読むか</span>'+esc(it.why)+'</p>'
+         + '<p class="todo"><span>やること</span>'+esc(it.todo)+'</p>'
+         + (it.link ? '<a href="'+it.link+'">'+esc(it.label)+'</a>' : '')+'</li>';
     });
     h += '</ol>';
   } else {
     h += '<p class="muted">いまのところ 大きな つまずきは 見えません。'
       + 'このまま いろいろな 単元を まぜて つづけて ください。</p>';
   }
-  h += '<p class="note">見かた：5問いじょう といて 70%に とどかない ところを「土台が あやしい」、'
-    + '60%未満を「にがて」と しています。にがてな 単元が あっても、その 手前の 単元が 崩れていれば'
-    + '<b>手前を 先に</b> すすめます。</p></div>';
+  h += '<p class="note">見かた：'+MIN+'問いじょう といて '+OK+'%に とどかない ところを「土台が あやしい」、'
+    + BAD+'%未満を「にがて」と しています。同じ 単元でも、くり上がりの ある/なし、'
+    + '通分の 要る/要らない のように <b>型で 2つに 割って</b> くらべ、'
+    + (GAP)+'ポイント以上 差が つく ところを「ここで 落ちている」と 言います。'
+    + 'にがてな 単元が あっても、その 手前の 単元が 崩れていれば <b>手前を 先に</b> すすめます。</p></div>';
+  }
 
   var a = analyse(recs), gs = Object.keys(a.byGrade).sort(), us = Object.keys(a.byUnit);
   var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
@@ -915,10 +1287,10 @@ document.addEventListener("DOMContentLoaded", function(){
     s.records.push({
       id: "r"+Date.now(),
       sheetId: sel.id, at: new Date().toISOString(), kid: name,
-      title: sel.title, score: okN, total: marks.length,
+      title: sel.title, score: okN, total: marks.length, prof: sel.prof||"",
       perQ: sel.qs.map(function(q,i){
         return {unit:q.unit, unitJa:q.unitJa, grade:q.grade, ok:marks[i]===1,
-                op:q.op||"", kind:q.kind||"", tid:q.tid||""};
+                op:q.op||"", kind:q.kind||"", tid:q.tid||"", sub:q.sub||q.tid||""};
       }),
       photo: photo || undefined
     });

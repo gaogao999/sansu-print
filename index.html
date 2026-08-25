@@ -169,7 +169,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   font-size:2.8mm;color:#8C9EB2;border-top:.6pt solid #C6D3E0;padding-top:1.6mm;margin-top:3mm;
 }
 .paper .foot .qrnote{display:inline-block;margin-top:.8mm}
-.paper .foot .qr{flex:0 0 auto;width:24mm;height:24mm;background:#fff;padding:1.5mm;box-sizing:content-box}
+.paper .foot .qr{flex:0 0 auto;background:#fff;padding:1.5mm;box-sizing:content-box}
 .paper .foot .qr svg{display:block;width:100%;height:100%}
 
 /* こたえは 紙には 出さない（場所だけ とっておく）。QR から 見る。 */
@@ -370,8 +370,12 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   </div>
 
   <div class="grp" id="g-carry">
-    <label class="c"><input type="checkbox" id="nocarry">
-      <span>くり上がり・くり下がり なし<small>たし算とひき算だけに かかります</small></span></label>
+    <span class="lb">くり上がり・くり下がり <em>＋と−だけに かかります</em></span>
+    <select id="carry">
+      <option value="any">どちらも 出す</option>
+      <option value="none">ない ものだけ</option>
+      <option value="only">ある ものだけ</option>
+    </select>
   </div>
 
   <div class="grp" id="g-div" hidden>
@@ -568,8 +572,12 @@ function tx(x,y,s,anchor,size){
 function dash(d){ return '<path d="'+d+'" stroke-dasharray="4 3"/>'; }
 
 /* ---------- 整数 ---------- */
-function genAdd(rand,da,db,nocarry){
-  if(!nocarry) return [ri(rand,lo(da),hi(da)), ri(rand,lo(db),hi(db))];
+function genAdd(rand,da,db,mode){
+  if(mode!=="none"){
+    var x = ri(rand,lo(da),hi(da)), y = ri(rand,lo(db),hi(db));
+    if(mode==="only" && !carryAdd(x,y)) return null;      /* くり上がりの あるものだけ */
+    return [x,y];
+  }
   var A = [], B = [], i;
   for(i=0;i<da;i++) A.push(i===0 && da>1 ? ri(rand,1,8) : ri(rand,0,9));
   for(i=0;i<db;i++){
@@ -581,12 +589,14 @@ function genAdd(rand,da,db,nocarry){
   if(a<lo(da)||b<lo(db)||b<1) return null;
   return [a,b];
 }
-function genSub(rand,da,db,noborrow){
+function genSub(rand,da,db,mode){
   if(da<db) da = db;
-  if(!noborrow){
+  if(mode!=="none"){
     var a = ri(rand,lo(da),hi(da)), b = ri(rand,lo(db),hi(db));
     if(b>a){ var t=a; a=b; b=t; }
-    return a===b ? null : [a,b];
+    if(a===b) return null;
+    if(mode==="only" && !borrowSub(a,b).any) return null; /* くり下がりの あるものだけ */
+    return [a,b];
   }
   var B = [], A = [], i;
   for(i=0;i<db;i++) B.push(i===0 && db>1 ? ri(rand,1,8) : ri(rand,0,9));
@@ -611,16 +621,48 @@ function genDiv(rand,da,db,mode){
   if(mode==="rem" && r===0) return null;
   return [a,d,q,r];
 }
+/* ---------- 問題の「型」の 印 ----------
+   採点の 見立てで「どこで つまずいたか」を 言うために、
+   問題を 作った ときに わかる 特ちょうを 短い文字で のこす。
+   c=繰り上がり/繰り下がり  z=0から借りる  r=あまり  w=2けたを かける/わる
+   k=小数点の位がそろわない  n=答えの末尾が0  t=通分  y=約分  m=帯分数
+   L/R=□の位置  p=かっこ  g=答えがマイナス  x=両辺にx           */
+function carryAdd(a,b){
+  var x = String(a).split("").reverse(), y = String(b).split("").reverse(), i, c = 0, s;
+  for(i=0;i<x.length;i++){
+    s = (+x[i]||0) + (+y[i]||0) + c;
+    if(s>=10) return true;
+    c = 0;
+  }
+  return false;
+}
+function borrowSub(a,b){
+  var x = String(a).split("").reverse(), y = String(b).split("").reverse(), i, d, br = 0,
+      any = false, zero = false;
+  for(i=0;i<x.length;i++){
+    d = (+x[i]) - (+y[i]||0) - br;
+    if(d<0){ any = true; if(x[i+1]==="0") zero = true; br = 1; } else br = 0;
+  }
+  return {any:any, zero:zero};
+}
+function intSub(op,a,b,rem){
+  var t = "";
+  if(op==="+"){ if(carryAdd(a,b)) t += "c"; }
+  else if(op==="-"){ var w = borrowSub(a,b); if(w.any) t += "c"; if(w.zero) t += "z"; }
+  else if(op==="*"){ if(String(b).length>=2) t += "w"; }
+  else { if(rem) t += "r"; if(String(b).length>=2) t += "w"; }
+  return t;
+}
 function uInt(rand,o){
   var op = pick(rand,o.ops), p, ans, rem = 0;
   if((op==="-"||op==="/") && o.da < o.db) o.da = o.db;   /* けたが 逆だと 作れないので そろえる */
-  if(op==="+"){ p = genAdd(rand,o.da,o.db,o.nocarry); if(!p) return null; ans = p[0]+p[1]; }
-  else if(op==="-"){ p = genSub(rand,o.da,o.db,o.nocarry); if(!p) return null; ans = p[0]-p[1]; }
+  if(op==="+"){ p = genAdd(rand,o.da,o.db,o.carry); if(!p) return null; ans = p[0]+p[1]; }
+  else if(op==="-"){ p = genSub(rand,o.da,o.db,o.carry); if(!p) return null; ans = p[0]-p[1]; }
   else if(op==="*"){ p = [ri(rand,Math.max(2,lo(o.da)),hi(o.da)), ri(rand,Math.max(2,lo(o.db)),hi(o.db))];
     ans = p[0]*p[1]; }
   else { p = genDiv(rand,o.da,o.db,o.divmode); if(!p) return null; ans = p[2]; rem = p[3]; }
   return {
-    kind:"calc", op:op, key:"i"+op+p[0]+"_"+p[1],
+    kind:"calc", op:op, sub:intSub(op,p[0],p[1],rem), key:"i"+op+p[0]+"_"+p[1],
     ex:p[0]+" "+sign(op)+" "+p[1], eq:eqs(),
     ans: rem ? (LANG==="ja" ? ans+" あまり "+rem : ans+" r "+rem) : String(ans),
     h:{kind: op==="/" ? "div" : "col", op:op, sa:String(p[0]), sb:String(p[1]),
@@ -631,19 +673,19 @@ function uInt(rand,o){
 function uHole(rand,o){
   var op = pick(rand,o.ops), p, a, b, c;
   if((op==="-"||op==="/") && o.da < o.db) o.da = o.db;
-  if(op==="+"){ p = genAdd(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a+b; }
-  else if(op==="-"){ p = genSub(rand,o.da,o.db,o.nocarry); if(!p) return null; a=p[0]; b=p[1]; c=a-b; }
+  if(op==="+"){ p = genAdd(rand,o.da,o.db,o.carry); if(!p) return null; a=p[0]; b=p[1]; c=a+b; }
+  else if(op==="-"){ p = genSub(rand,o.da,o.db,o.carry); if(!p) return null; a=p[0]; b=p[1]; c=a-b; }
   else if(op==="*"){ a = ri(rand,Math.max(2,lo(o.da)),hi(o.da)); b = ri(rand,Math.max(2,lo(o.db)),hi(o.db)); c = a*b; }
   else { p = genDiv(rand,o.da,o.db,"exact"); if(!p) return null; a=p[0]; b=p[1]; c=p[2]; }
   var left = (((o.n||0)+(o.off||0)) % 2) === 0;     /* □ を 左と右に かわりばんこで 置く */
-  return {kind:"calc", op:op, key:"H"+op+a+"_"+b+(left?"L":"R"),
+  return {kind:"calc", op:op, sub:(left?"L":"R")+intSub(op,a,b,0), key:"H"+op+a+"_"+b+(left?"L":"R"),
     ex: (left ? "□" : a) + " " + sign(op) + " " + (left ? b : "□") + " " + eqs() + " " + c,
     eq: "□ " + eqs(), ans: String(left ? a : b)};
 }
 
 /* ---------- 小数 ---------- */
 function uDec(rand,o){
-  var op = pick(rand,o.ops), p = o.dp, A,B,pa,pb,pans,ansN,sa,sb,sans;
+  var op = pick(rand,o.ops), p = o.dp, A,B,pa,pb,pans,ansN,sa,sb,sans,pd = 0;
   if(op==="+"||op==="-"){
     pa = p; pb = ri(rand,1,p);
     A = ri(rand, Math.pow(10,pa), Math.pow(10,pa+2)-1);
@@ -660,12 +702,21 @@ function uDec(rand,o){
     if(o.grade<5){ B = ri(rand,2,9); pb = 0; } else { pb = 1; B = ri(rand,11,99); }
     sa = dfmt(A,pa); sb = dfmt(B,pb); sans = dfmt(A*B,pa+pb);
   } else {
-    var q,d,pq,pd;
+    var q,d,pq;
     if(o.grade<5){ pq = p; q = ri(rand,Math.pow(10,pq),Math.pow(10,pq+1)-1); pd = 0; d = ri(rand,2,9); }
     else { pq = ri(rand,0,1); q = ri(rand, pq?11:2, pq?99:19); pd = 1; d = ri(rand,11,99); }
     sa = dfmt(q*d,pq+pd); sb = dfmt(d,pd); sans = dfmt(q,pq);
   }
-  return {kind:"calc", op:op, key:"d"+op+sa+"_"+sb, ex:sa+" "+sign(op)+" "+sb, eq:eqs(), ans:sans,
+  /* 印は 紙に 出ている 数から 決める（内部の けた数では ない）*/
+  var dsub = "", dpOf = function(x){ var i = String(x).indexOf("."); return i<0 ? 0 : String(x).length-i-1; };
+  var ka = dpOf(sa), kb = dpOf(sb), km = Math.max(ka,kb);
+  if(op==="+"||op==="-"){
+    if(ka!==kb) dsub += "k";                                  /* 小数点の 位が そろわない */
+    var ia = Math.round(Number(sa)*Math.pow(10,km)), ib = Math.round(Number(sb)*Math.pow(10,km));
+    if(op==="+" ? carryAdd(ia,ib) : borrowSub(ia,ib).any) dsub += "c";
+    if(dpOf(sans) < km) dsub += "n";                          /* 末尾の 0 が 消える */
+  } else if(kb>=1) dsub += "w";                               /* 小数を かける・小数で わる */
+  return {kind:"calc", op:op, sub:dsub, key:"d"+op+sa+"_"+sb, ex:sa+" "+sign(op)+" "+sb, eq:eqs(), ans:sans,
     h:{kind:"col", op:op, sa:sa, sb:sb, sans:sans, rem:0, mulrows:1}};
 }
 /* ---------- 分数 ---------- */
@@ -683,7 +734,11 @@ function uFrac(rand,o){
     n1 = ri(rand,1,d1-1); n2 = ri(rand,1,d2-1);
     if(op==="*"){ N = n1*n2; D = d1*d2; } else { N = n1*d2; D = d1*n2; }
   }
-  return {kind:"calc", op:op, key:"f"+op+n1+"/"+d1+"_"+n2+"/"+d2,
+  var fsub = "";
+  if(d1!==d2) fsub += "t";                                    /* 通分が 要る */
+  if(gcd(N,D)>1) fsub += "y";                                 /* 約分が 要る */
+  if(N>=D) fsub += "m";                                       /* 帯分数に なおす */
+  return {kind:"calc", op:op, sub:fsub, key:"f"+op+n1+"/"+d1+"_"+n2+"/"+d2,
     ex:frHTML(n1,d1)+" "+sign(op)+" "+frHTML(n2,d2), eq:eqs(), ans:fracAnsHTML(N,D)};
 }
 /* ---------- 四則混合 ---------- */
@@ -700,7 +755,8 @@ function uMixed(rand,o){
   else if(pat===7){ c=ri(rand,2,9); var q=ri(rand,2,12); b=ri(rand,1,c*q-1); a=c*q-b;
     ex="( "+a+" "+P+" "+b+" ) "+D+" "+c; ans=(a+b)/c; }
   else { c=ri(rand,2,9); var e=ri(rand,2,15); b=ri(rand,1,30); a=b+e; ex="( "+a+" "+S+" "+b+" ) "+M+" "+c; ans=(a-b)*c; }
-  return {kind:"calc", key:"m"+ex, ex:ex, eq:eqs(), ans:String(ans)};
+  return {kind:"calc", sub:(pat>=6?"p":"")+(pat===5||pat===7?"d":""),
+    key:"m"+ex, ex:ex, eq:eqs(), ans:String(ans)};
 }
 /* ---------- がい数（四捨五入） ---------- */
 function uRound(rand,o){
@@ -813,7 +869,7 @@ function uNeg(rand,o){
     b = ri(rand,1,12) * (rand()<0.5 ? -1 : 1);
     ans = op==="+" ? a+b : op==="-" ? a-b : a*b;
   }
-  return {kind:"calc", op:op, key:"n"+op+a+"_"+b,
+  return {kind:"calc", op:op, sub:(ans<0?"g":"")+(b<0?"b":""), key:"n"+op+a+"_"+b,
     ex:sgn(a,P)+" "+MSIGN[op]+" "+sgn(b,P), eq:"=", ans:mnum(ans)};
 }
 /* ---------- 一次方程式 ---------- */
@@ -1616,7 +1672,7 @@ function unitOf(id){
 }
 /* ミックスの ときに つかう、単元ごとの きほん設定 */
 function unitDefaults(id,grade){
-  var o = {grade:grade, ops:["+"], da:2, db:1, nocarry:false, divmode:"exact",
+  var o = {grade:grade, ops:["+"], da:2, db:1, carry:"any", divmode:"exact",
            dp:1, fd:"diff", paren:true, negparen:true, eqform:"any"};
   if(id==="int"){
     if(grade<=3){ o.ops=["+","-","*"]; o.da=3; o.db=2; }
@@ -1638,10 +1694,10 @@ function unitDefaults(id,grade){
    ========================================================== */
 var state = {
   grades:[4], cats:["calc","fig","word"], units:["int"], lang:"ja",
-  type:"hissan", ops:["/"], da:3, db:2, nocarry:false, divmode:"rem",
+  type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true,
+  title:"", titleDirty:false, namerow:true, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -1688,7 +1744,7 @@ function allowedOps(){
 function optsOf(u,grade){
   var d = unitDefaults(u.id,grade), s = single(), k;
   if(s && s.id===u.id){
-    var keys = ["ops","da","db","nocarry","divmode","dp","fd","paren","negparen","eqform"];
+    var keys = ["ops","da","db","carry","divmode","dp","fd","paren","negparen","eqform"];
     for(k=0;k<keys.length;k++) if(state[keys[k]]!==undefined) d[keys[k]] = state[keys[k]];
     d.grade = grade;
     if(!d.ops.length) d.ops = unitDefaults(u.id,grade).ops;
@@ -1723,6 +1779,7 @@ function makeSet(st){
     seen[q.key] = 1;
     made[u.id] = (made[u.id] || 0) + 1;
     q.unit = u; q.grade = grade;
+    q.sub = q.sub || q.tid || "";                /* 問題の 型（見立てで つかう） */
     out.push(q); i++;
   }
   return out;
@@ -1884,7 +1941,8 @@ function hint(st,qs){
     }
     if(u.id==="int" && st.type!=="masu"){
       bits.push(T(st.da+"けた と "+st.db+"けた", st.da+"-digit & "+st.db+"-digit"));
-      if(st.nocarry) bits.push(T("くり上がり・くり下がりなし","no regrouping"));
+      if(st.carry==="none") bits.push(T("くり上がり・くり下がりなし","no regrouping"));
+      else if(st.carry==="only") bits.push(T("くり上がり・くり下がりあり","regrouping only"));
       if(st.ops.indexOf("/")>=0) bits.push(T(st.divmode==="rem"?"あまりあり":"わりきれる", st.divmode==="rem"?"with remainders":"exact"));
     }
     if(u.id==="dec") bits.push(T(st.dp===2?"小数第2位まで":"小数第1位まで", st.dp===2?"2 decimal places":"1 decimal place"));
@@ -1912,23 +1970,51 @@ function plainAns(h){
   s = s.replace(/(\d)\s*(?:あまり|r)\s*(\d)/g,"$1r$2").replace(/\//g,"~");
   return s.replace(/[!*]/g,"").replace(/\s+/g,"_").replace(/^_+|_+$/g,"");
 }
-/* さいてん画面に わたす 中身。単元と 演算も 入れて、分析が できるように する */
+/* このプリントの むずかしさ（けた数・あまり・くり上がり）。
+   ちがう設定の プリントを ならべて「けたが 増えると 落ちる」を 見るために わたす */
+function sheetProf(st,sheet){
+  return (sheet||"yoko").charAt(0)
+    + (st.da||0) + (st.db||0)
+    + (st.divmode==="rem" ? "r" : "")
+    + (st.carry==="none" ? "n" : st.carry==="only" ? "o" : "")
+    + (st.fd==="diff" ? "t" : "");
+}
+var TIDC = {                 /* 型の 名まえ → 2文字。QR を 紙に のる 大きさに するため */
+  acirc:"00", acirc_r:"01", aida:"02", amari:"03", at1:"04",
+  at2:"05", at3:"06", at4:"07", at5:"08", at6:"09",
+  ato:"0a", awase:"0b", bai:"0c", biki:"0d", bunsoku:"0e",
+  chigai:"0f", circum:"0g", circum_d:"0h", coin:"0i", daikin:"0j",
+  erabu:"0k", f_awase:"0l", f_nokori:"0m", fun:"0n", goukei:"0o",
+  hanadan:"0p", hayasa:"0q", heikin:"0r", jikan:"0s", junban:"0t",
+  kabusoku:"0u", kantan:"0v", kataho:"0w", komi:"0x", kurabe:"0y",
+  mae:"0z", mashi:"10", michi:"11", morau:"12", moto:"13",
+  nanpa:"14", narabe:"15", nedan:"16", nenpi:"17", nenrei:"18",
+  ni_kai:"19", ni_nokori:"1a", nokori:"1b", ochi:"1c", omosa:"1d",
+  oturi:"1e", para_h:"1f", perim:"1g", perim_side:"1h", rect_area:"1i",
+  rect_side:"1j", rect_square:"1k", renzoku:"1l", sougo:"1m", toubun:"1n",
+  tri_h:"1o", tsuku:"1p", vol5:"1q", vol5_h:"1r", wakeru:"1s",
+  waru:"1t"
+};
+/* さいてん画面に わたす 中身。単元・演算・型・むずかしさを 入れて、分析が できるように する */
 /* ぜんぶ 同じ文字なら 1文字だけ 書く（読む がわで ふくらませる） */
 function same(a){
   for(var i=1;i<a.length;i++) if(a[i]!==a[0]) return a.join("");
   return a.length ? a[0] : "";
 }
-function sheetPayload(st,qs){
-  var units = [], idx = [], ops = [], ans = [];
+function sheetPayload(st,qs,sheet){
+  var tags = [], idx = [], ans = [];
   qs.forEach(function(q){
-    var key = (q.unit ? q.unit.id : "x") + "." + (q.grade || 0);
-    var i = units.indexOf(key);
-    if(i<0){ units.push(key); i = units.length-1; }
+    /* 計算は 印の 文字を そのまま、文章題・図形は 型を 2文字に して 短く する */
+    var sub = q.sub || "";
+    if(q.unit && q.unit.cat !== "calc") sub = TIDC[sub] || "";
+    var tag = (q.unit ? q.unit.id : "x") + "." + (q.grade || 0)
+            + (OPC[q.op] || "z") + sub;
+    var i = tags.indexOf(tag);
+    if(i<0){ tags.push(tag); i = tags.length-1; }
     idx.push(i.toString(36));
-    ops.push(OPC[q.op] || "z");
     ans.push(plainAns(q.ans));
   });
-  return ["1", st.seed, units.join("-"), same(idx), same(ops), ans.join("!")].join("*");
+  return ["3", st.seed, tags.join("-"), same(idx), ans.join("!"), sheetProf(st,sheet)].join("*");
 }
 /* 100マスは こたえが 表から 作れるので、見出しの 数だけ わたす */
 function masuPayload(st,m){
@@ -1957,6 +2043,9 @@ function saitenBase(){
     ? location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,"saiten.html")
     : SAITEN;
 }
+/* 1マスが 小さすぎると 家の プリンタでは にじんで 読めない。
+   中身が 多い ときは QR 自体を 大きく して、1マスを 0.42mm 以上に たもつ。 */
+var QRCELL = 0.42, QRMIN = 24, QRMAX = 34;
 function qrSvg(pay){
   if(typeof qrcode!=="function" || !pay) return "";
   var url = saitenBase() + "#" + payloadHash(pay), lv = ["M","L"], i;
@@ -1964,18 +2053,21 @@ function qrSvg(pay){
     try{
       var q = qrcode(0,lv[i]);
       q.addData(url); q.make();
-      return q.createSvgTag({cellSize:1, margin:0, scalable:true});
+      var n = q.getModuleCount();
+      var mm = Math.min(QRMAX, Math.max(QRMIN, Math.ceil(n*QRCELL)));
+      return '<span class="qr" style="width:'+mm+'mm;height:'+mm+'mm">'
+           + q.createSvgTag({cellSize:1, margin:0, scalable:true}) + '</span>';
     }catch(e){}
   }
   return "";
 }
-function qrTag(st,qs){
+function qrTag(st,qs,sheet){
   if(!qs) return "";
-  return qrSvg(qs.masu ? masuPayload(st,qs.masu) : (qs.length ? sheetPayload(st,qs) : ""));
+  return qrSvg(qs.masu ? masuPayload(st,qs.masu) : (qs.length ? sheetPayload(st,qs,sheet) : ""));
 }
 function paper(st,inner,extraField,sheet,qs){
   var fields = "", bodyCls = sheet==="masu" ? "body center" : "body";
-  var qrsvg = qrTag(st,qs);
+  var qrsvg = qrTag(st,qs,sheet);
   if(st.namerow){
     fields = '<div class="fields">'
       + '<span class="fl nm"><i>'+T("名まえ","Name")+'</i><u></u></span>'
@@ -1993,7 +2085,7 @@ function paper(st,inner,extraField,sheet,qs){
         + T("こたえは この QR から（さいてんの 画面が ひらきます）","Scan this QR for the answer key")
         + '</span>' : '')
     + '</span>'
-    + (qrsvg ? '<span class="qr">'+qrsvg+'</span>' : '')+'</div>'
+    + qrsvg+'</div>'
     + '</div></div>';
 }
 
@@ -2282,11 +2374,12 @@ function saveHistory(){
   if(!Array.isArray(h)) h = [];
   h.push({
     id:"s"+Date.now(), at:new Date().toISOString(), no:String(state.seed),
-    title: state.title || autoTitle(), lang: state.lang,
+    title: state.title || autoTitle(), lang: state.lang, prof: sheetProf(state, sheetKind()),
     qs: lastQs.map(function(q){
       return {q: q.kind==="calc" ? q.ex : q.q, a: q.ans,
               unit: q.unit ? q.unit.id : "", unitJa: q.unit ? q.unit.ja : "",
-              grade: q.grade || 0, op: q.op || "", kind: q.kind || "", tid: q.tid || ""};
+              grade: q.grade || 0, op: q.op || "", kind: q.kind || "",
+              tid: q.tid || "", sub: q.sub || ""};
     })
   });
   if(h.length>40) h = h.slice(-40);
@@ -2311,11 +2404,13 @@ function clean(){
   st.divmode = pickOne(st.divmode,["exact","rem"],"exact");
   st.fd = pickOne(st.fd,["same","diff"],"diff");
   st.eqform = pickOne(st.eqform,["any","a","b"],"any");
+  st.carry = pickOne(st.carry,["any","none","only"],"any");
+  delete st.nocarry;
   st.cols = pickOne(String(st.cols),["auto","1","2","3"],"auto");
   st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
   st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
   st.seed = num(st.seed,1,99999,1234);
-  ["nocarry","paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
+  ["paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
   st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
@@ -2325,10 +2420,12 @@ function load(){
     var raw = localStorage.getItem(STORE);
     if(!raw) return;
     var o = JSON.parse(raw);
-    ["lang","type","da","db","nocarry","divmode","dp","fd","paren","negparen","eqform",
+    ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
      "count","cols","mixmode","countAuto","title","titleDirty","namerow"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
+    /* 前の 形（チェックボックスの nocarry）で 保存された ものを 引きつぐ */
+    if(o.carry===undefined && o.nocarry===true) state.carry = "none";
     ["grades","cats","units","ops"].forEach(function(k){
       if(Array.isArray(o[k]) && o[k].length) state[k] = o[k];
     });
@@ -2338,7 +2435,7 @@ function load(){
 function applyToForm(){
   document.getElementById("da").value = state.da;
   document.getElementById("db").value = state.db;
-  document.getElementById("nocarry").checked = state.nocarry;
+  document.getElementById("carry").value = state.carry;
   document.getElementById("dp").value = state.dp;
   document.getElementById("fd").value = state.fd;
   document.getElementById("paren").checked = state.paren;
@@ -2379,6 +2476,14 @@ function fromURL(){
       if(state.cats.indexOf(un.cat)<0) state.cats.push(un.cat);
       if(state.grades.filter(function(x){ return un.g.indexOf(x)>=0; }).length===0)
         state.grades = [un.g[un.g.length-1]];
+      /* 単元を 指定した リンクは「見立てからの 処方」。前に つかった むずかしさが
+         のこって いると 中身が 変わって しまうので、いったん その単元の 既定に もどす。
+         このあと URL で 指定された ものだけ 上書きする。 */
+      var d = unitDefaults(un.id, state.grades[0]);
+      ["ops","da","db","carry","divmode","dp","fd","paren","negparen","eqform"].forEach(function(k){
+        state[k] = d[k];
+      });
+      if(un.forms && un.forms.indexOf(state.type)<0) state.type = un.forms[0];
     }
     var o = p.get("o"), map = {a:"+", s:"-", m:"*", d:"/"}, ops = [];
     if(o) String(o).split("").forEach(function(c){ if(map[c]) ops.push(map[c]); });
@@ -2388,6 +2493,8 @@ function fromURL(){
     var db = Number(p.get("db")); if(db>=1 && db<=4) state.db = db;
     var dm = p.get("dm"); if(dm==="rem" || dm==="exact") state.divmode = dm;
     var t = p.get("t"); if(["yoko","hissan","masu"].indexOf(t)>=0) state.type = t;
+    var fd = p.get("fd"); if(["same","diff","any"].indexOf(fd)>=0) state.fd = fd;
+    var cy = p.get("cy"); if(["any","none","only"].indexOf(cy)>=0) state.carry = cy;
     if(g || un || o) state.titleDirty = false;
   }catch(e){}
 }
@@ -2450,7 +2557,7 @@ document.addEventListener("DOMContentLoaded", function(){
   bindSelect("dp","dp",true);
   bindSelect("fd","fd",false);
   bindSelect("eqform","eqform",false);
-  bindCheck("nocarry","nocarry");
+  bindSelect("carry","carry",false);
   bindCheck("paren","paren");
   bindCheck("negparen","negparen");
   bindCheck("namerow","namerow");
