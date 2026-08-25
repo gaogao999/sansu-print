@@ -175,6 +175,34 @@ label.file input{display:none}
 .rec .del{flex:0 0 auto;background:none;border:none;color:var(--ink2);font-size:17px;cursor:pointer;padding:4px}
 .hide{display:none}
 
+/* 現在地 */
+.here{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  border-radius:12px;padding:14px 16px;background:var(--accent-soft);margin:2px 0 12px}
+.here b{font-size:30px;line-height:1;letter-spacing:.02em}
+.here span{font-size:14px;color:var(--ink2)}
+.here.thin{background:var(--desk2)}
+.here.thin b{font-size:20px}
+.ladder{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.lv{display:grid;grid-template-columns:38px 60px 1fr 44px;grid-template-areas:"g s bar pc" ". . sub sub";
+  align-items:center;gap:2px 8px;padding:5px 0}
+.lv .g{grid-area:g;font-size:14px;font-weight:700;color:var(--ink2)}
+.lv .stt{grid-area:s;font-size:11px;font-weight:700;text-align:center;
+  border:1px solid var(--line);border-radius:20px;padding:2px 0;color:var(--ink2)}
+.lv .bar{grid-area:bar;height:9px;border-radius:20px;background:var(--desk2);overflow:hidden}
+.lv .bar i{display:block;height:100%;border-radius:20px;background:var(--line)}
+.lv .pc{grid-area:pc;font-size:13px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.lv .sub{grid-area:sub;font-size:11px;color:var(--ink2)}
+.lv.pass .g,.lv.pass .pc{color:var(--accent)}
+.lv.pass .stt{border-color:var(--accent);color:var(--accent)}
+.lv.pass .bar i{background:var(--accent)}
+.lv.near .bar i,.lv.work .bar i{background:var(--accent);opacity:.55}
+.lv.thin .bar i{background:var(--line)}
+.lv.none{opacity:.45}
+.lv.now .g{color:var(--ink);font-size:15px}
+.lv.now .stt{border-width:1.5px;border-color:var(--ink);color:var(--ink)}
+.tiles.small .tile b{font-size:19px}
+.tiles.small .tile b span{font-size:12px}
+
 .bkrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .bkrow .btn{flex:1 1 160px}
 .bkrow .file{flex:1 1 160px;display:flex;align-items:center;justify-content:center;text-align:center}
@@ -304,8 +332,15 @@ function decodeHash(){
   var ops = v1 ? f[4] : "", prof = v3 ? (f[5]||"") : "";
   var out = [], i, units = [];
   if(!/^[a-z0-9]{0,8}$/.test(prof)) prof = "";
+  /* 型の 番号は 1問1文字。型が 36を こえる ときだけ 2文字ずつ。
+     ぜんぶ 同じなら 1文字だけ 書いて ある。 */
+  var wide = idx.length === ans.length*2 && ans.length>1;
+  var at = function(i){
+    if(idx.length===1) return parseInt(idx,36);
+    return wide ? parseInt(idx.substr(i*2,2),36) : parseInt(idx.charAt(i),36);
+  };
   for(i=0;i<ans.length;i++){
-    var key = tags[parseInt(idx.length===1 ? idx : idx.charAt(i), 36)] || "";
+    var key = tags[at(i)] || "";
     var d = key.indexOf("."), id = d>0 ? key.slice(0,d) : key;
     var rest = d>0 ? key.slice(d+1) : "";
     var g = +rest.charAt(0) || 0;
@@ -788,21 +823,66 @@ function stamina(recs){
   return d>=15 ? {front:Math.round(fO/fN*100), back:Math.round(bO/bN*100), n:fN+bN, gap:d} : null;
 }
 
-/* 学年ごとの 通りぐあい（現在地） */
-function ladder(recs){
-  var g = {};
+/* ==========================================================
+   現在地（レベル）
+   正答率だけで「その学年は 通過」とは 言わない。
+   単元を いくつ ためしたか も 見る。2単元 90%は「通過」では なく
+   「まだ ためして いない ところが 多い」だけ。
+   ========================================================== */
+var LVN = {pass:"通過", near:"あと 少し", work:"練習中", thin:"ためし中", none:"まだ"};
+function unitsOfGrade(g){
+  return Object.keys(U).filter(function(id){ return U[id].g.indexOf(g)>=0; });
+}
+function levelOf(recs){
+  var by = {};
   recs.forEach(function(r){ (r.perQ||[]).forEach(function(q){
     if(!GRN[q.grade]) return;
-    var x = g[q.grade] || (g[q.grade] = {n:0,ok:0}); x.n++; if(q.ok) x.ok++;
+    var x = by[q.grade] || (by[q.grade] = {n:0, ok:0, u:{}});
+    x.n++; if(q.ok) x.ok++;
+    if(q.unit) x.u[q.unit] = (x.u[q.unit]||0) + 1;
   }); });
-  var gs = Object.keys(g).map(Number).sort(function(a,b){ return a-b; })
-             .filter(function(k){ return g[k].n>=MIN; });
-  var done = [], stuck = null, i;
-  for(i=0;i<gs.length;i++){
-    if(rate(g[gs[i]])>=HIGH) done.push(gs[i]);
-    else if(rate(g[gs[i]])<OK && stuck===null) stuck = gs[i];
+  var rows = [3,4,5,6,7].map(function(g){
+    var all = unitsOfGrade(g), x = by[g];
+    if(!x) return {g:g, st:"none", n:0, ok:0, r:0, tried:0, all:all.length, rest:all};
+    var tried = Object.keys(x.u).filter(function(id){ return x.u[id]>=3; });
+    /* 「通過」と 言うには、点だけで なく その学年の 単元を ひととおり
+       さわって いる ことが 要る。2単元 90%は 通過では ない。 */
+    var r = rate(x), st, need = Math.max(3, Math.ceil(all.length*0.4));
+    if(x.n<12 || tried.length<Math.min(2,all.length)) st = "thin";
+    else if(r>=HIGH && tried.length>=Math.min(need,all.length)) st = "pass";
+    else if(r>=HIGH) st = "thin";                 /* 点は いいが ためした 範囲が せまい */
+    else if(r>=OK) st = "near";
+    else st = "work";
+    return {g:g, st:st, n:x.n, ok:x.ok, r:r, tried:tried.length, all:all.length,
+            rest:all.filter(function(id){ return !x.u[id]; })};
+  });
+  var passed = rows.filter(function(z){ return z.st==="pass"; }).map(function(z){ return z.g; });
+  var now = null, i;
+  for(i=0;i<rows.length;i++) if(rows[i].n>0 && rows[i].st!=="pass"){ now = rows[i].g; break; }
+  if(now===null && passed.length) now = Math.min(7, passed[passed.length-1]+1);
+  return {rows:rows, passed:passed, now:now,
+          row:function(g){ return rows.filter(function(z){ return z.g===g; })[0]; }};
+}
+/* 現在地を ひとことで */
+function levelLine(L, total){
+  var now = L.now, row = now ? L.row(now) : null, bits = [];
+  if(L.passed.length)
+    bits.push(L.passed.map(function(g){ return GRN[g]; }).join("・")+"は 通過して います");
+  if(row){
+    if(row.st==="none")
+      bits.push(GRN[now]+"は まだ 1問も といて いません");
+    else if(row.st==="thin" && row.r>=HIGH && row.n>=12)
+      bits.push(GRN[now]+"は といた ぶんでは "+row.r+"%と よく できて います。"
+        + "ただ "+row.all+"単元のうち "+row.tried+"単元しか ためして いないので、"
+        + "まだ 「通過」とは 言えません");
+    else if(row.st==="thin")
+      bits.push(GRN[now]+"は まだ "+row.n+"問（"+row.tried+"単元）なので、これから 見えて きます");
+    else
+      bits.push("いま "+GRN[now]+"の とちゅうで、"+row.all+"単元のうち "+row.tried
+        +"単元を ためして "+row.r+"%");
   }
-  return {g:g, gs:gs, done:done, stuck:stuck};
+  if(!bits.length) bits.push("といた 問題は "+total+"問");
+  return bits.join("。") + "。";
 }
 
 /* ==========================================================
@@ -1048,7 +1128,7 @@ function advise(recs){
         link:linkTo(rest[0], g, "&n="+nFor(rest[0])), label:nameOf(rest[0])+"を ためす"});
     }
   }
-  return {items:out, total:total, byOp:byOp, weak:weakCount, ladder:ladder(recs)};
+  return {items:out, total:total, byOp:byOp, weak:weakCount, level:levelOf(recs)};
 }
 
 
@@ -1087,30 +1167,51 @@ function viewAna(){
   var tot = recs.reduce(function(a,r){ return a+r.total; },0);
   var ok  = recs.reduce(function(a,r){ return a+r.score; },0);
   var last = recs[recs.length-1];
-  h += '<div class="card"><h2>いまの ところ</h2><div class="tiles">'
-    + '<div class="tile"><b>'+pct(ok,tot)+'<span style="font-size:14px">点</span></b><span>ぜんぶの 平均</span></div>'
+  var ad = advise(recs), L = ad.level;
+
+  /* --- 現在地（レベル） --- */
+  h += '<div class="card"><h2>いまの 現在地 <em>'+esc(anaKid || (kids.length?kids[0]:"この人"))+'</em></h2>';
+  if(tot < 12){
+    h += '<div class="here thin"><b>まだ わかりません</b>'
+      + '<span>あと '+(12-tot)+'問ほど（1枚ぶん）</span></div>'
+      + '<p class="muted">学年の 通りぐあいを 出すには、その 学年で 12問（1枚ぶん）は 要ります。'
+      + '1枚 つけると ここに 出ます。</p>';
+  } else {
+    var nowRow = L.now ? L.row(L.now) : null;
+    h += '<div class="here '+(nowRow ? nowRow.st : "none")+'">'
+      + '<b>'+(L.now ? GRN[L.now] : "—")+'</b>'
+      + '<span>'+(!nowRow ? "" : nowRow.st==="none" ? "は これから"
+                : nowRow.st==="thin" ? "を ためして いる ところ"
+                : nowRow.st==="pass" ? "まで 通過" : "の とちゅう")+'</span></div>';
+    h += '<p class="lead">'+esc(levelLine(L, tot))+'</p>';
+    h += '<div class="ladder">';
+    L.rows.slice().reverse().forEach(function(z){
+      h += '<div class="lv '+z.st+(z.g===L.now?" now":"")+'">'
+        + '<span class="g">'+GRN[z.g]+'</span>'
+        + '<span class="stt">'+LVN[z.st]+'</span>'
+        + '<span class="bar"><i style="width:'+(z.n?z.r:0)+'%"></i></span>'
+        + '<span class="pc">'+(z.n ? z.r+'%' : '')+'</span>'
+        + (z.n ? '<span class="sub">'+z.n+'問 ・ '+z.tried+'/'+z.all+'単元</span>' : '')
+        + '</div>';
+    });
+    h += '</div>';
+    /* まだ ためして いない ところが あると、判定は そこまで */
+    var nr = nowRow && nowRow.rest ? nowRow.rest : [];
+    if(nowRow && nowRow.st!=="none" && nr.length){
+      h += '<p class="note">'+GRN[L.now]+'で まだ ためして いない 単元が '+nr.length+' あります（'
+        + esc(nr.slice(0,4).map(nameOf).join("・")) + (nr.length>4 ? " ほか" : "")
+        + '）。ここを ためすと 現在地が はっきりします。</p>';
+    }
+  }
+  h += '<div class="tiles small">'
+    + '<div class="tile"><b>'+pct(ok,tot)+'<span>点</span></b><span>ぜんぶの 平均</span></div>'
     + '<div class="tile"><b>'+recs.length+'</b><span>つけた プリント</span></div>'
     + '<div class="tile"><b>'+tot+'</b><span>といた 問題</span></div>'
-    + '<div class="tile"><b>'+pct(last.score,last.total)+'<span style="font-size:14px">点</span></b><span>いちばん 新しい 1枚</span></div>'
+    + '<div class="tile"><b>'+pct(last.score,last.total)+'<span>点</span></b><span>いちばん 新しい 1枚</span></div>'
     + '</div></div>';
 
   /* --- 見立て（基礎が 先） --- */
-  var ad = advise(recs), L = ad.ladder;
-
-  /* いまの ところ：どの学年まで 通っていて、どこで 止まっているか */
-  var lad = "";
-  if(L.gs.length){
-    lad = L.gs.map(function(g){
-      return GRN[g]+" "+rate(L.g[g])+"%（"+L.g[g].n+"問）";
-    }).join("　/　");
-  }
-  h += '<div class="card"><h2>見立て <em>プロの 見かたで、土台から 順に</em></h2>';
-  h += '<p class="lead">'+esc(
-        "といた 問題は ぜんぶで "+ad.total+"問。"
-        + (lad ? "学年べつでは "+lad+"。" : "")
-        + (L.done.length ? L.done.map(function(g){return GRN[g];}).join("・")+"は 通って います。" : "")
-        + (L.stuck!==null ? GRN[L.stuck]+"が いまの 山です。" : "")
-      )+'</p>';
+  h += '<div class="card"><h2>見立て <em>土台から 順に</em></h2>';
   if(ad.total < 12){
     h += '<p class="muted">まだ '+ad.total+'問です。この数では、どこで つまずいて いるかは 分かりません。'
       + 'あと '+(20-ad.total)+'問ほど（1〜2枚）とくと、型べつに 分けて 見られる ように なります。</p>'
@@ -1142,7 +1243,7 @@ function viewAna(){
     + 'にがてな 単元が あっても、その 手前の 単元が 崩れていれば <b>手前を 先に</b> すすめます。</p></div>';
   }
 
-  var a = analyse(recs), gs = Object.keys(a.byGrade).sort(), us = Object.keys(a.byUnit);
+  var a = analyse(recs), us = Object.keys(a.byUnit);
   var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
   /* --- 計算の 種類ごと --- */
   var ops = Object.keys(ad.byOp).filter(function(o){ return ad.byOp[o].n>=3; });
@@ -1159,16 +1260,7 @@ function viewAna(){
     h += '</div><p class="note">整数と 虫食い算の 問題だけで 数えています。'
       + '分数や 小数の × ÷ を まぜると、計算の 力と 単元の 理解が ごちゃまぜに なるためです。</p></div>';
   }
-  if(gs.length){
-    h += '<div class="card"><h2>学年ごとの 出来ぐあい</h2><div class="bars">';
-    gs.forEach(function(g){
-      var x = a.byGrade[g], p = pct(x.ok,x.n);
-      h += '<div class="bar"><div class="nm">'+(GN[g]||g)+'</div>'
-        + '<div class="vl">'+p+'%<small>'+x.ok+'/'+x.n+'問</small></div>'
-        + '<div class="track"><div class="fill" style="width:'+p+'%"></div></div></div>';
-    });
-    h += '</div></div>';
-  }
+  /* 学年ごとの 出来ぐあいは 上の「いまの 現在地」で 出して いる */
   /* 単元は 出来ない順。5問以上 やって 60%未満を「にがて」と 呼ぶ */
   us.sort(function(x,y){ return pct(a.byUnit[x].ok,a.byUnit[x].n) - pct(a.byUnit[y].ok,a.byUnit[y].n); });
   h += '<div class="card"><h2>単元ごとの 出来ぐあい <em>できない 順</em></h2><div class="bars">';
