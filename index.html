@@ -259,6 +259,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .hissan .ansarea.x2{height:14mm}
 .hissan .ansarea.x3{height:21mm}
 .hissan .ansarea.x4{height:28mm}
+.hissan .ansarea.x5{height:35mm}   /* 4けたを かける ときは 部分積が 4だん 出る */
 .hissan .ansrow{display:flex;justify-content:flex-end;height:7mm;align-items:center}
 
 /* わり算のひっ算 */
@@ -1807,13 +1808,13 @@ function makeMasu(st){
    ========================================================== */
 /* 中身が 入りきる 列の 数の 上限。ここを こえると 紙から はみ出す。
    「1行の 数」を 自分で えらんだ ときも、ここで おさえる。 */
-function maxCols(st,sheet){
+function maxCols(st,qs,sheet){
   if(sheet==="hissan") return (st.da>=4 || st.db>=3) ? 2 : 3;
   if(sheet==="block")  return 2;            /* 図や 文は はばが 要る */
-  return 3;
+  return 3;                                 /* 横に 入るかは 描いてから 測る */
 }
 function autoCols(st,qs,sheet){
-  return Math.min(maxCols(st,sheet), autoColsWant(st,qs,sheet));
+  return Math.min(maxCols(st,qs,sheet), autoColsWant(st,qs,sheet));
 }
 function autoColsWant(st,qs,sheet){
   if(st.cols!=="auto") return Number(st.cols);
@@ -1892,7 +1893,7 @@ function hissanHTML(qs,cols){
       h += '<div class="calc">'
          +   '<div class="row"><span class="op"></span>'+cells(x.sa,iw,fw,false)+'</div>'
          +   '<div class="row"><span class="op">'+sign(x.op)+'</span>'+cells(x.sb,iw,fw,false)+'</div>'
-         +   '<div class="ansarea'+(rows>1?" x"+Math.min(rows,4):"")+'">'
+         +   '<div class="ansarea'+(rows>1?" x"+Math.min(rows,5):"")+'">'
          +     '<div class="ansrow" style="margin-top:'+((rows-1)*7)+'mm">'
          +       '<span class="op"></span>'+cells(x.sans,iw,fw,true)+'</div>'
          +   '</div></div>';
@@ -2165,11 +2166,11 @@ function sheetKind(){
   if(!f.length) return "block";
   return f.indexOf(state.type)>=0 ? state.type : f[0];
 }
-var trimmed = false, lastQs = null;
+var trimmed = false, probed = false, colCap = 0, lastQs = null;
 function render(depth){
   var st = state, w = document.getElementById("warn"), stage = document.getElementById("stage");
   LANG = st.lang;
-  if(!depth) trimmed = false;
+  if(!depth){ trimmed = false; probed = false; colCap = 0; }
   if(!chosenUnits().length){
     stage.innerHTML = "";
     w.textContent = "たんげんを 1つ以上 えらんでください。";
@@ -2191,6 +2192,7 @@ function render(depth){
       for(i=0;i<qs.length;i++) if(!qs[i].h){ sheet = "yoko"; break; }
     }
     cols = autoCols(st,qs,sheet);
+    if(colCap && cols > colCap) cols = colCap;
     lastQs = qs;
     inner = sheet==="hissan" ? hissanHTML(qs,cols)
           : sheet==="block"  ? blockHTML(qs,cols) : yokoHTML(qs,cols);
@@ -2200,8 +2202,15 @@ function render(depth){
   fit();
   if(sheet!=="masu"){
     var fitres = layoutSheets(sheet,cols), d = depth||0;
+    /* 式が 列の はばに 入らなかった → 列を 1つ 減らして やり直す */
+    if(fitres.wide && cols > 1 && d < 12){
+      colCap = cols - 1;
+      return render(d+1);
+    }
     if(fitres.cap && st.count > fitres.cap && d<12){
-      var fitted = fitCount(fitres.cap);
+      /* 入る ところまで きっちり 入れる。選択肢の 数に 丸めると
+         数問 ぶん むだに なる ので、測った 数を そのまま つかう。 */
+      var fitted = fitres.cap;
       /* 行の 高さが そろわない 紙では 見つもりが ぶれる。
          かならず 1歩は 減らして、はみ出したまま 終わらない ように する。 */
       if(fitted >= st.count) fitted = st.count - Math.max(1, cols);
@@ -2211,16 +2220,22 @@ function render(depth){
         return render(d+1);
       }
     }
-    /* 数を 自分で えらんでいない ときは、用紙が うまるまで ふやす */
-    if(st.countAuto && !trimmed && fitres.room >= cols && !short && d<4){
-      var grown = fitCount(st.count + fitres.room);
-      if(grown > st.count){
-        st.count = grown; fillCount();
+    /* 数を 自分で えらんでいない ときは、用紙が うまるまで ふやす。
+       いちばん 低い 行を もとに 強気に 見つもる。入りきらなければ
+       上の しくみが きっちり 減らして くれるので、行き過ぎても 直る。 */
+    if(st.countAuto && !trimmed && !short && d<10 && fitres.unitH > 0){
+      var add = Math.floor(fitres.left / fitres.unitH) * cols;
+      /* 見つもりで 0でも、行の 高さは 中身で 変わる ので 最後に もう1行 ためす。
+         入らなければ 上の しくみが 元に もどす。 */
+      if(add <= 0 && !probed){ add = cols; probed = true; }
+      if(add > 0){
+        st.count = st.count + add; fillCount(st.count);
+        probed = false;              /* 入った なら もう1行 ためせる */
         return render(d+1);
       }
     }
   }
-  if(trimmed && !short){
+  if(trimmed && !short && !st.countAuto){
     w.textContent = "1まいに おさまる数に あわせて " + st.count + "問 に しました。";
     w.hidden = false;
   } else if(short){
@@ -2232,6 +2247,7 @@ function render(depth){
 /* 用紙に 合わせて 行間を そろえる。はみ出す ときは 入る数を かえす */
 function layoutSheets(sheet,cols){
   var papers = document.querySelectorAll(".paper"), capacity = 0, room = Infinity;
+  var freeLeft = Infinity, unitH = 0, wide = false;
   var capPx = (sheet==="hissan" ? 12 : sheet==="block" ? 14 : 20) * MM;
   for(var p=0;p<papers.length;p++){
     var body = papers[p].querySelector(".body");
@@ -2243,16 +2259,19 @@ function layoutSheets(sheet,cols){
     var usable = body.clientHeight - padTop;
     var gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
     var top0 = grid.offsetTop;
-    var bottom = 0, ih = 0;
+    var bottom = 0, ih = 0, ihMin = Infinity;
+    for(i=0;i<n;i++)
+      if(items[i].scrollWidth > items[i].clientWidth + 1) wide = true;   /* 横に 入らない */
     for(i=0;i<n;i++){
       bottom = Math.max(bottom, items[i].offsetTop - top0 + items[i].offsetHeight);
       ih = Math.max(ih, items[i].offsetHeight);
+      ihMin = Math.min(ihMin, items[i].offsetHeight);
     }
     if(bottom > usable + 0.5){                       /* 入りきらない */
       for(i=0;i<n;i++)
         if(items[i].offsetTop - top0 + items[i].offsetHeight > usable + 0.5) break;
-      capacity = Math.max(cols, Math.floor(i/cols)*cols);
-      room = 0;
+      capacity = Math.max(1, i);                     /* 入る ところまでは 入れる */
+      room = 0; freeLeft = 0;
       break;
     }
     var rows = Math.ceil(n/cols);
@@ -2261,14 +2280,19 @@ function layoutSheets(sheet,cols){
       grid.style.gridAutoRows = cellH + "px";
       bottom = rows*cellH + (rows-1)*gap;
     }
-    var left = Math.max(0, usable - bottom - 1);   /* 1px だけ 余らせて、端に ぴったり つけない */
+    /* 高さの 測りは 整数に まるめられる ので、行が 多いと 2〜3px ずれる。
+       すこし 余らせて、端に ぴったり つけない。 */
+    var left = Math.max(0, usable - bottom - 4);
     /* いちばん つまっている 紙に あわせて、あと 何問 入るかを 見る */
     room = Math.min(room, Math.floor((left + gap)/(ih + gap)) * cols);
+    freeLeft = Math.min(freeLeft, left);
+    unitH = Math.max(unitH, (ihMin===Infinity ? ih : ihMin) + gap);
     grid.style.height = "100%";
     grid.style.alignContent = "center";
     grid.style.rowGap = (rows>1 ? Math.min(gap + left/(rows-1), capPx) : gap) + "px";
   }
-  return {cap:capacity, room: room===Infinity ? 0 : Math.max(0,room)};
+  return {cap:capacity, room: room===Infinity ? 0 : Math.max(0,room),
+          left: freeLeft===Infinity ? 0 : Math.max(0,freeLeft), unitH:unitH, wide:wide};
 }
 /* iPhone は ホーム画面から 開いた アプリだと 印刷の画面が 出ない。
    iframe の 中でも 無視されることが あるので、だまって 終わらせない */
@@ -2345,8 +2369,11 @@ function fillCount(exact){
     if(opts.indexOf(cur)>=0) best = cur;
   }
   state.count = best;
-  sel.innerHTML = opts.map(function(n){
-    return '<option value="'+n+'"'+(n===best?" selected":"")+'>'+n+'問</option>';
+  /* 「おまかせ」＝ 用紙が うまる 数に 自動で 合わせる。
+     いま 何問に なったかも 見えるように しておく。 */
+  var auto = '<option value="auto"'+(state.countAuto?" selected":"")+'>おまかせ（'+best+'問）</option>';
+  sel.innerHTML = auto + opts.map(function(n){
+    return '<option value="'+n+'"'+(!state.countAuto && n===best ? " selected":"")+'>'+n+'問</option>';
   }).join("");
 }
 function fillGrades(){
@@ -2646,8 +2673,12 @@ document.addEventListener("DOMContentLoaded", function(){
     r.addEventListener("change",function(){ state.divmode = this.value; update(); });
   });
   document.getElementById("count").addEventListener("change",function(){
-    state.count = Number(this.value);
-    state.countAuto = false;                       /* 自分で えらんだ 数は そのまま つかう */
+    if(this.value === "auto"){
+      state.countAuto = true;                      /* 用紙に 合わせて 自動で 決める */
+    } else {
+      state.count = Number(this.value);
+      state.countAuto = false;                     /* 自分で えらんだ 数は そのまま つかう */
+    }
     save(); render();
   });
   document.getElementById("cols").addEventListener("change",function(){
