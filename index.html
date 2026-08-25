@@ -694,6 +694,10 @@ function uDec(rand,o){
     pa = p; pb = ri(rand,1,p);
     A = ri(rand, Math.pow(10,pa), Math.pow(10,pa+2)-1);
     B = ri(rand, Math.pow(10,pb), Math.pow(10,pb+1)-1);
+    if(o.grade<=3){
+      /* 小3は 1/10の位まで。0.1〜9.9 の 小さい 数だけ にする */
+      pa = pb = 1; A = ri(rand,2,99); B = ri(rand,2,99);
+    }
     var m = Math.max(pa,pb), an = A*Math.pow(10,m-pa), bn = B*Math.pow(10,m-pb);
     if(op==="-"){
       if(an===bn) return null;
@@ -726,7 +730,23 @@ function uDec(rand,o){
 /* ---------- 分数 ---------- */
 function uFrac(rand,o){
   var op = pick(rand,o.ops), d1,d2,n1,n2,N,D;
-  if(op==="+"||op==="-"){
+  if(o.grade<=3){
+    /* 小3は「簡単な場合」だけ（指導要領 第3学年）。同じ分母で、
+       こたえは 真分数か 1。約分（小5）にも 帯分数（小4）にも しない。 */
+    if(op!=="+" && op!=="-") op = rand()<0.5 ? "+" : "-";
+    d1 = d2 = ri(rand,3,10);
+    var cand = [], i, j, t;
+    for(i=1;i<d1;i++) for(j=1;j<d1;j++){
+      t = op==="+" ? i+j : i-j;
+      if(t<=0 || t>d1) continue;
+      if(t<d1 && gcd(t,d1)>1) continue;
+      cand.push(i*100+j);
+    }
+    if(!cand.length) return null;
+    t = cand[Math.floor(rand()*cand.length)];
+    n1 = Math.floor(t/100); n2 = t%100;
+    N = op==="+" ? n1+n2 : n1-n2; D = d1;
+  } else if(op==="+"||op==="-"){
     d1 = ri(rand,2,9);
     d2 = o.fd==="same" ? d1 : ri(rand,2,9);
     if(o.fd==="diff" && d2===d1) return null;
@@ -740,8 +760,8 @@ function uFrac(rand,o){
   }
   var fsub = "";
   if(d1!==d2) fsub += "t";                                    /* 通分が 要る */
-  if(gcd(N,D)>1) fsub += "y";                                 /* 約分が 要る */
-  if(N>=D) fsub += "m";                                       /* 帯分数に なおす */
+  if(gcd(N,D)>1 && N!==D) fsub += "y";                        /* 約分が 要る */
+  if(N>D) fsub += "m";                                        /* 帯分数に なおす */
   return {kind:"calc", op:op, sub:fsub, key:"f"+op+n1+"/"+d1+"_"+n2+"/"+d2,
     ex:frHTML(n1,d1)+" "+sign(op)+" "+frHTML(n2,d2), eq:eqs(), ans:fracAnsHTML(N,D)};
 }
@@ -898,11 +918,30 @@ function uEq(rand,o){
   return {kind:"calc", key:"e"+ex, ex:ex, eq:"x =", ans:mnum(x)};
 }
 /* ---------- 比例と反比例 ---------- */
+/* 小5の 比例で つかう「ともなって 変わる 2つの 量」*/
+function cap(t){ return t.charAt(0).toUpperCase()+t.slice(1); }
+var PROP5 = [
+  {ja:["リボンの 長さ","m","代金","円"],   en:["ribbon length"," m","price"," yen"]},
+  {ja:["ノートの さっ数","さつ","代金","円"], en:["number of notebooks","","price"," yen"]},
+  {ja:["時間","分","水の かさ","L"],       en:["time"," min","water"," L"]},
+  {ja:["ひもの 長さ","m","重さ","g"],      en:["string length"," m","weight"," g"]}
+];
 function uProp(rand,o){
   var a = ri(rand,2,9), x1 = ri(rand,2,9), x2 = ri(rand,2,12), inv = o.grade>=6 && rand()<0.4;
   var guard = 0;
   while(x2===x1 && guard++<20) x2 = ri(rand,2,12);   /* 同じ x を 2回 聞かない */
   if(x2===x1) return null;
+  if(o.grade<=5){
+    /* 小5は「簡単な場合の 比例」。y＝ax の 言い方は まだ しないので、
+       ともなって 変わる 2つの 量を そのまま 聞く（指導要領 第5学年）。 */
+    var m = cyc(PROP5,o), per = ri(rand,2,9)*10, y1 = per*x1, y2 = per*x2;
+    return {kind:"calc", long:true, key:"P5"+per+"_"+x1+"_"+x2+"_"+m.ja[0],
+      ex:T(m.ja[0]+"と "+m.ja[2]+"は 比例します。"+x1+m.ja[1]+" の とき "+y1+m.ja[3]
+           +" です。"+x2+m.ja[1]+" の とき "+m.ja[2]+"は",
+           cap(m.en[0])+" and "+m.en[2]+" are proportional. When "+m.en[0]+" is "+x1+m.en[1]
+           +", "+m.en[2]+" is "+y1+m.en[3]+". Find "+m.en[2]+" when "+m.en[0]+" is "+x2+m.en[1]),
+      eq:"", ans:y2+T(m.ja[3], m.en[3])};
+  }
   if(inv){
     var k = a*x1*2, ds = [], d;
     for(d=2; d<=20; d++) if(k%d===0 && d!==x1) ds.push(d);
@@ -1636,13 +1675,13 @@ var UNITS = [
   {id:"hole",    cat:"calc", g:[3,4,5,6],   ja:"虫食い算（□を もとめる）", en:"Missing numbers", gen:uHole, ops:1, opts:["digits"]},
   {id:"round",   cat:"calc", g:[4],         ja:"がい数（四捨五入）",    en:"Rounding",             gen:uRound},
   {id:"divisor", cat:"calc", g:[5],         ja:"倍数と 約数",           en:"Multiples & factors",  gen:uDivisor},
-  {id:"dec",     cat:"calc", g:[4,5,6,7],   ja:"小数の 計算",           en:"Decimals",             gen:uDec,   forms:["yoko","hissan"], ops:1, opts:["dec"]},
-  {id:"frac",    cat:"calc", g:[4,5,6,7],   ja:"分数の 計算",           en:"Fractions",            gen:uFrac,  ops:1, opts:["frac"]},
+  {id:"dec",     cat:"calc", g:[3,4,5,6,7],   ja:"小数の 計算",           en:"Decimals",             gen:uDec,   forms:["yoko","hissan"], ops:1, opts:["dec"]},
+  {id:"frac",    cat:"calc", g:[3,4,5,6,7],   ja:"分数の 計算",           en:"Fractions",            gen:uFrac,  ops:1, opts:["frac"]},
   {id:"unit",    cat:"calc", g:[3,4,5,6],   ja:"単位の かんさん",       en:"Unit conversion",      gen:uUnit},
   {id:"ratioc",  cat:"calc", g:[5,6],       ja:"割合・百分率",          en:"Percentages",          gen:uRatioC},
   {id:"hi",      cat:"calc", g:[6],         ja:"比",                    en:"Ratios",               gen:uHi},
   {id:"letter",  cat:"calc", g:[6,7],       ja:"文字と 式",             en:"Algebraic expressions",gen:uLetter},
-  {id:"prop",    cat:"calc", g:[6,7],       ja:"比例と 反比例",         en:"Direct & inverse variation", gen:uProp},
+  {id:"prop",    cat:"calc", g:[5,6,7],       ja:"比例と 反比例",         en:"Direct & inverse variation", gen:uProp},
   {id:"neg",     cat:"calc", g:[7],         ja:"正負の数",              en:"Positive & negative numbers", gen:uNeg, ops:1, opts:["neg"]},
   {id:"eq",      cat:"calc", g:[7],         ja:"一次方程式",            en:"Linear equations",     gen:uEq,    opts:["eq"]},
   /* 図形 */
@@ -1685,10 +1724,14 @@ function unitDefaults(id,grade){
     else { o.ops=["+","-","*","/"]; o.da=3; o.db=2; }
   }
   if(id==="hole") o.ops = grade<=3 ? ["+","-"] : ["+","-","*","/"];
-  if(id==="dec"){ o.ops = grade<5 ? ["+","-","*"] : ["+","-","*","/"]; }
+  if(id==="dec"){
+    /* 小3は 1/10の位の たし算・ひき算 だけ（指導要領 第3学年）*/
+    o.ops = grade<=3 ? ["+","-"] : grade<5 ? ["+","-","*"] : ["+","-","*","/"];
+    o.dp  = 1;
+  }
   if(id==="frac"){
     o.ops = grade<6 ? ["+","-"] : ["+","-","*","/"];
-    if(grade<=4) o.fd = "same";                    /* 小4は 同じ分母だけ */
+    if(grade<=4) o.fd = "same";                    /* 小3・小4は 同じ分母だけ */
   }
   if(id==="neg")  o.ops = ["+","-","*","/"];
   return o;
@@ -1744,6 +1787,8 @@ function allowedOps(){
   var s = single();
   if(!s || !s.ops) return [];
   if(s.id==="frac" && state.grades.every(function(g){ return g<6; })) return ["+","-"];
+  /* 小3の 小数は たし算・ひき算 まで。かける・わるは 小4から */
+  if(s.id==="dec" && state.grades.every(function(g){ return g<4; })) return ["+","-"];
   return ["+","-","*","/"];
 }
 function optsOf(u,grade){
@@ -1941,11 +1986,22 @@ function gradeLabel(){
   var g = state.grades.filter(function(x){ return GRADENAME[x]; }).sort(function(a,b){return a-b;});
   return gradeSpan(g);
 }
+/* えらんで いる 学年で 名まえが 変わる 単元。
+   小5の 比例に 反比例は 入らない（反比例は 小6から）。 */
+function unitName(u,lang){
+  var lg = lang || LANG;
+  if(u.id==="prop"){
+    var gs = gradesFor(u);
+    if(gs.length && gs.every(function(g){ return g<=5; }))
+      return lg==="en" ? "Proportion" : "比例";
+  }
+  return u[lg];
+}
 function autoTitle(){
   var c = chosenUnits(), head = gradeLabel()+" ";
   if(!c.length) return head+T("プリント","Worksheet");
   if(c.length===1){
-    var u = c[0], nm2 = u[LANG];
+    var u = c[0], nm2 = unitName(u);
     if(u.id==="int"){
       var one = state.ops.length===1 ? T({"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"}[state.ops[0]],
         {"+":"Addition","-":"Subtraction","*":"Multiplication","/":"Division"}[state.ops[0]]) : nm2;
@@ -1966,7 +2022,7 @@ function hint(st,qs){
   var c = chosenUnits(), bits = [gradeLabel()], i;
   if(c.length===1){
     var u = c[0];
-    bits.push(u[LANG]);
+    bits.push(unitName(u));
     if(u.id==="int" || u.id==="dec" || u.id==="frac" || u.id==="neg"){
       bits.push(st.ops.map(function(o){ return T({"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"}[o],
         {"+":"add","-":"subtract","*":"multiply","/":"divide"}[o]); }).join(T("・","/")));
@@ -1981,7 +2037,7 @@ function hint(st,qs){
     if(u.id==="frac") bits.push(T(st.fd==="same"?"同じ分母":"ちがう分母", st.fd==="same"?"like denominators":"unlike denominators"));
     if(st.type==="masu") bits.push(T("100マス","100 squares"));
   } else {
-    var names = c.map(function(u){ return u[LANG]; });
+    var names = c.map(function(u){ return unitName(u); });
     bits.push(names.slice(0,4).join(T("・",", ")) + (names.length>4 ? T(" ほか"," and more") : ""));
   }
   return bits.join(T("　/　"," / "));
@@ -2415,7 +2471,7 @@ function fillUnits(){
   h += vis.map(function(u){
     var gs = gradeSpan(gradesFor(u),"ja");
     return '<button type="button" data-v="'+u.id+'" aria-pressed="'+(state.units.indexOf(u.id)>=0)+'">'
-         + '<i>'+gs+'</i>'+u.ja+'</button>';
+         + '<i>'+gs+'</i>'+unitName(u,"ja")+'</button>';
   }).join("");
   document.getElementById("unit").innerHTML = h;
   var n = chosenUnits().length;
@@ -2459,8 +2515,14 @@ function syncUI(){
   document.getElementById("g-carry").hidden  = !has("carry") || isMasu ||
     (st.ops.indexOf("+")<0 && st.ops.indexOf("-")<0);
   document.getElementById("g-div").hidden    = !has("div") || isMasu || st.ops.indexOf("/")<0;
-  document.getElementById("g-dec").hidden    = !has("dec");
-  document.getElementById("g-frac").hidden   = !has("frac") ||
+  /* 学年で 決まって いる ところは えらばせない（指導要領）。
+     小3の 小数は 1/10の位まで、小4までの 分数は 同じ分母だけ。 */
+    var upto = function(n){ return st.grades.length>0 &&
+      st.grades.every(function(g){ return g<n; }); };
+  if(has("dec") && upto(4) && st.dp!==1){ st.dp = 1; document.getElementById("dp").value = "1"; }
+  if(has("frac") && upto(5) && st.fd!=="same"){ st.fd = "same"; document.getElementById("fd").value = "same"; }
+  document.getElementById("g-dec").hidden    = !has("dec") || upto(4);
+  document.getElementById("g-frac").hidden   = !has("frac") || upto(5) ||
     (st.ops.indexOf("+")<0 && st.ops.indexOf("-")<0);
   document.getElementById("g-mixed").hidden  = !has("paren");
   document.getElementById("g-neg").hidden    = !has("neg");
