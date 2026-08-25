@@ -132,6 +132,11 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   font-variant-numeric:tabular-nums;letter-spacing:.06em}
 .warn{font-size:11.5px;color:var(--red);line-height:1.55;margin:0}
 .warn[hidden]{display:none}
+.warn a{color:inherit}
+.warn.soft{color:var(--ink2)}
+.warn.soft button{border-color:var(--line);color:var(--ink2)}
+.warn button{margin-top:6px;border:1.5px solid var(--red);background:transparent;color:var(--red);
+  border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
 
 /* ---------- 用紙 ---------- */
 .stage{padding:26px 24px 60px;display:flex;flex-direction:column;align-items:center;gap:26px}
@@ -441,6 +446,8 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   </div>
 
   <p class="warn" id="warn" hidden></p>
+
+  <p class="warn" id="printhelp" hidden></p>
 
   <div class="acts">
     <button type="button" class="btn-new" id="regen">べつの問題に する</button>
@@ -2011,6 +2018,36 @@ function layoutSheets(sheet,cols){
   }
   return {cap:capacity, room: room===Infinity ? 0 : Math.max(0,room)};
 }
+/* iPhone は ホーム画面から 開いた アプリだと 印刷の画面が 出ない。
+   iframe の 中でも 無視されることが あるので、だまって 終わらせない */
+function standalone(){
+  try{
+    return (window.navigator && window.navigator.standalone === true) ||
+           (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }catch(e){ return false; }
+}
+function framed(){ try{ return window.self !== window.top; }catch(e){ return true; } }
+function printNow(){
+  var help = document.getElementById("printhelp"), alone = standalone();
+  if(!alone){
+    try{ window.print(); }catch(e){}
+  }
+  if(!help) return;
+  help.className = alone ? "warn" : "warn soft";
+  help.innerHTML = alone
+    ? "ホーム画面から ひらいた ときは、iPhone では 印刷の画面が 出ません。"
+      + "下の ボタンで ブラウザに うつって 印刷してください。"
+    : "印刷の画面が 出てこない ときは、下の ボタンで 新しいタブに うつって ください。";
+  var b = document.createElement("button");
+  b.type = "button";
+  b.textContent = alone ? "ブラウザで ひらく" : "新しいタブで ひらく";
+  b.addEventListener("click", function(){
+    try{ window.open(location.href, "_blank", "noopener"); }catch(e){}
+  });
+  help.appendChild(document.createElement("br"));
+  help.appendChild(b);
+  help.hidden = false;
+}
 /* だいめいが 1行に 入るまで 字を 小さくする */
 function fitTitles(){
   [].forEach.call(document.querySelectorAll(".paper .head h2"), function(h){
@@ -2330,7 +2367,7 @@ document.addEventListener("DOMContentLoaded", function(){
   });
   document.getElementById("print").addEventListener("click",function(){
     try{ saveHistory(); }catch(e){}                /* 記録に しくじっても 印刷は 止めない */
-    window.print();
+    printNow();
   });
 
   window.addEventListener("resize", fit);
