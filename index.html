@@ -1943,10 +1943,19 @@ function payloadHash(pay){
   var raw = encodeURIComponent(pay), b = b64url(pay);
   return raw.length <= b.length + 2 ? "s=" + raw : "b=" + b;
 }
+/* QR は 紙に のって、よその スマホが 読む。
+   だから 必ず 外から とどく URL に する。
+   さいてんの ページが となりに ある と わかって いる ところだけ、
+   その ページを 指す（fork や 手もとの コピーでも つながる ように）。 */
+var SAITEN = "https://gaogao999.github.io/sansu-print/saiten.html";
+function nearbySaiten(){
+  return /^https?:$/.test(location.protocol)
+    && /(^|\.)github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
+}
 function saitenBase(){
-  return (/claude/i.test(location.hostname) || location.protocol==="file:")
-    ? "https://gaogao999.github.io/sansu-print/saiten.html"
-    : location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,"saiten.html");
+  return nearbySaiten()
+    ? location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,"saiten.html")
+    : SAITEN;
 }
 function qrSvg(pay){
   if(typeof qrcode!=="function" || !pay) return "";
@@ -2389,7 +2398,7 @@ document.addEventListener("DOMContentLoaded", function(){
   applyToForm();
   /* さいてん の ページが ある ところでだけ リンクを 出す */
   var toS = document.getElementById("tosaiten");
-  if(toS && !/claude/i.test(location.hostname)) toS.hidden = false;
+  if(toS){ toS.href = saitenBase(); toS.hidden = false; }
 
   document.getElementById("grade").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
