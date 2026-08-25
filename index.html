@@ -2379,6 +2379,12 @@ function syncUI(){
     st.da = st.db;
     document.getElementById("da").value = st.da;
   }
+  /* 1けた − 1けた では くり下がりが 起きない。
+     「ある ものだけ」を えらんだ ときは、ひかれる数を 2けたに 上げる。 */
+  if(has("carry") && st.carry==="only" && st.ops.indexOf("-")>=0 && st.da < 2){
+    st.da = 2;
+    document.getElementById("da").value = st.da;
+  }
   var divOnly = st.ops.length===1 && st.ops[0]==="/";
   document.getElementById("lbA").textContent = divOnly ? "わられる数" : "左の数";
   document.getElementById("lbB").textContent = divOnly ? "わる数" : "右の数";
