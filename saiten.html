@@ -412,7 +412,9 @@ function masuTable(m){
   for(r=0;r<m.rows.length;r++){
     h += '<tr><th>'+esc(m.rows[r])+'</th>';
     for(c=0;c<m.cols.length;c++){
-      x = Number(m.cols[c]); y = Number(m.rows[r]);
+      /* 紙と 同じ 向きで 計算する（左の 数 − 上の 数）。
+         ＋と×は 入れかえても 同じだが、−は 逆に なる。 */
+      x = Number(m.rows[r]); y = Number(m.cols[c]);
       h += '<td>'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</td>';
     }
     h += '</tr>';

@@ -1789,9 +1789,19 @@ function makeSet(st){
   }
   return out;
 }
+/* 100マスに できるのは たし算・ひき算・かけ算だけ。
+   わり算は マスが きれいに 割りきれないので 作れない。
+   えらばれて いる 演算が わり算の ときは たし算に もどす
+   （題も 見出しも ここから 出すので、表と 食いちがわない）。 */
+var MASUOPS = ["+","-","*"];
+function masuOp(ops){
+  var i;
+  for(i=0;i<(ops||[]).length;i++) if(MASUOPS.indexOf(ops[i])>=0) return ops[i];
+  return "+";
+}
 function makeMasu(st){
   var rand = mulberry((st.seed*40503+7) % 4294967296);
-  var op = state.ops.indexOf("*")>=0 ? "*" : (state.ops.indexOf("-")>=0 ? "-" : "+");
+  var op = masuOp(st.ops);
   function shuffle(arr){
     for(var i=arr.length-1;i>0;i--){ var j=Math.floor(rand()*(i+1)); var t=arr[i];arr[i]=arr[j];arr[j]=t; }
     return arr;
@@ -2430,7 +2440,7 @@ function syncUI(){
   var ops = allowedOps(), isMasu = kind==="masu";
   st.ops = st.ops.filter(function(o){ return ops.indexOf(o)>=0; });
   if(!st.ops.length && ops.length) st.ops = [ops[0]];
-  if(isMasu && st.ops.length>1) st.ops = [st.ops[0]];
+  if(isMasu) st.ops = [masuOp(st.ops)];
   document.getElementById("g-ops").hidden = ops.length===0;
   [].forEach.call(document.querySelectorAll("#ops button"),function(b){
     var ok = ops.indexOf(b.dataset.v)>=0 && !(isMasu && b.dataset.v==="/");
