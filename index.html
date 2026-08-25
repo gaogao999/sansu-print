@@ -2139,7 +2139,7 @@ function syncUI(){
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); }catch(e){} }
 /* 印刷した プリントを「さいてん」側から えらべるように 記録する */
 function saveHistory(){
-  if(!lastQs || !lastQs.length) return;
+  if(!lastQs || !lastQs.length || typeof localStorage==="undefined") return;
   var h = [];
   try{ h = JSON.parse(localStorage.getItem(HIST)) || []; }catch(e){ h = []; }
   if(!Array.isArray(h)) h = [];
@@ -2248,10 +2248,11 @@ function fromURL(){
 }
 document.addEventListener("DOMContentLoaded", function(){
   load();
-  fromURL();
+  try{ fromURL(); }catch(e){}
   applyToForm();
   /* さいてん の ページが ある ところでだけ リンクを 出す */
-  if(!/claude/i.test(location.hostname)) document.getElementById("tosaiten").hidden = false;
+  var toS = document.getElementById("tosaiten");
+  if(toS && !/claude/i.test(location.hostname)) toS.hidden = false;
 
   document.getElementById("grade").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
@@ -2328,7 +2329,7 @@ document.addEventListener("DOMContentLoaded", function(){
     state.seed = Math.floor(Math.random()*9000)+1000; render();
   });
   document.getElementById("print").addEventListener("click",function(){
-    saveHistory();
+    try{ saveHistory(); }catch(e){}                /* 記録に しくじっても 印刷は 止めない */
     window.print();
   });
 
