@@ -2040,6 +2040,36 @@ function sheetPayload(st,qs,sheet){
 function masuPayload(st,m){
   return ["2", st.seed, OPC[m.op]||"m", m.cols.join("-"), m.rows.join("-")].join("*");
 }
+/* ---- 英数モード用の 書き方（v4）----
+   QR は 大文字・数字・記号だけなら 1字 5.5ビットで 入る（ふつうの 文字は 8ビット）。
+   同じ 中身でも マス目が 1割ほど 減り、1マスが 大きく なって 見た目が 粗く なる。
+   ただし 大文字に すると もどせない ので、こたえが 数字と 記号だけの ときに 限る
+   （図形や 文章題は「cm」「円」が 入るので 対象外）。 */
+var ALSAFE = /^[0-9.~_r-]*$/;
+function sheetPayloadAl(st,qs,sheet){
+  var tags = [], nums = [], ans = [], ok = true;
+  qs.forEach(function(q){
+    var p = plainAns(q.ans);
+    if(!ALSAFE.test(p)) ok = false;
+    var sub = q.sub || "";
+    if(q.unit && q.unit.cat !== "calc") sub = TIDC[sub] || "";
+    else sub = sub.replace(/L/g,"1").replace(/R/g,"2");   /* □の位置は 数字に 逃がす */
+    var tag = ((q.unit ? q.unit.id : "x") + "." + (q.grade || 0)
+             + (OPC[q.op] || "z") + sub).toUpperCase();
+    var i = tags.indexOf(tag);
+    if(i<0){ tags.push(tag); i = tags.length-1; }
+    nums.push(i);
+    ans.push(p.replace(/~/g,"/").replace(/_/g,":").replace(/r/g,"R"));
+  });
+  if(!ok) return "";
+  var wide = tags.length > 36;
+  var idx = nums.map(function(i){
+    var c = i.toString(36).toUpperCase();
+    return wide ? (c.length<2 ? "0"+c : c) : c;
+  });
+  return ["4", st.seed, tags.join("-"), same(idx), ans.join("+"),
+          String(sheetProf(st,sheet)).toUpperCase()].join("*");
+}
 function b64url(s){
   return btoa(unescape(encodeURIComponent(s)))
     .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
@@ -2066,24 +2096,39 @@ function saitenBase(){
 /* 1マスが 小さすぎると 家の プリンタでは にじんで 読めない。
    中身が 多い ときは QR 自体を 大きく して、1マスを 0.42mm 以上に たもつ。 */
 var QRCELL = 0.36, QRMIN = 18, QRMAX = 30;
-function qrSvg(pay){
+/* 書き方を いくつか 試して、マス目が いちばん 少ない ものを つかう。
+   減らせない ときは 今までと 同じに なるので、悪く なる ことは ない。 */
+function qrTry(level, url, alPay){
+  try{
+    var q = qrcode(0, level);
+    if(alPay){ q.addData(saitenBase()+"#a=", "Byte"); q.addData(alPay, "Alphanumeric"); }
+    else q.addData(url);
+    q.make();
+    return q;
+  }catch(e){ return null; }
+}
+function qrSvg(pay, alPay){
   if(typeof qrcode!=="function" || !pay) return "";
-  var url = saitenBase() + "#" + payloadHash(pay), lv = ["M","L"], i;
-  for(i=0;i<lv.length;i++){
-    try{
-      var q = qrcode(0,lv[i]);
-      q.addData(url); q.make();
-      var n = q.getModuleCount();
-      var mm = Math.min(QRMAX, Math.max(QRMIN, Math.ceil(n*QRCELL)));
-      return '<span class="qr" style="width:'+mm+'mm;height:'+mm+'mm">'
-           + q.createSvgTag({cellSize:1, margin:0, scalable:true}) + '</span>';
-    }catch(e){}
+  var url = saitenBase() + "#" + payloadHash(pay), lv = ["M","L"], i, best = null, c;
+  for(i=0;i<lv.length && !best;i++){
+    c = qrTry(lv[i], url, null);
+    if(c) best = c;
+    if(alPay){
+      c = qrTry(lv[i], url, alPay);
+      if(c && (!best || c.getModuleCount() < best.getModuleCount())) best = c;
+    }
   }
-  return "";
+  if(!best) return "";
+  var n = best.getModuleCount();
+  var mm = Math.min(QRMAX, Math.max(QRMIN, Math.ceil(n*QRCELL)));
+  return '<span class="qr" style="width:'+mm+'mm;height:'+mm+'mm">'
+       + best.createSvgTag({cellSize:1, margin:0, scalable:true}) + '</span>';
 }
 function qrTag(st,qs,sheet){
   if(!qs) return "";
-  return qrSvg(qs.masu ? masuPayload(st,qs.masu) : (qs.length ? sheetPayload(st,qs,sheet) : ""));
+  if(qs.masu) return qrSvg(masuPayload(st,qs.masu));
+  if(!qs.length) return "";
+  return qrSvg(sheetPayload(st,qs,sheet), sheetPayloadAl(st,qs,sheet));
 }
 function paper(st,inner,extraField,sheet,qs){
   var fields = "", bodyCls = sheet==="masu" ? "body center" : "body";

@@ -306,13 +306,30 @@ function qrTitle(units){
   return t.trim() || "プリント";
 }
 function decodeHash(){
-  var m = /[#&](s|b)=([^&]+)/.exec(location.hash || "");
+  var m = /[#&](s|b|a)=([^&]+)/.exec(location.hash || "");
   if(!m) return null;
   var pay;
   try{
     pay = m[1]==="s" ? decodeURIComponent(m[2])
+        : m[1]==="a" ? m[2]                       /* 英数モード。そのまま 読む */
         : decodeURIComponent(escape(atob(m[2].replace(/-/g,"+").replace(/_/g,"/"))));
   }catch(e){ return null; }
+  /* v4（英数モード）は 大文字で 書いて ある。小文字に もどして v3 と 同じに 扱う。
+     こたえの / : R は もとの ~ _ r に もどす。 */
+  var wasAl = false;
+  if(pay.charAt(0)==="4"){
+    var g4 = pay.split("*");
+    if(g4.length<5) return null;
+    wasAl = true;
+    g4[0] = "3";
+    g4[2] = g4[2].toLowerCase();
+    g4[3] = g4[3].toLowerCase();
+    g4[4] = g4[4].split("+").map(function(x){
+      return x.replace(/R/g,"r").replace(/:/g,"_").replace(/\//g,"~");
+    }).join("!");
+    g4[5] = (g4[5]||"").toLowerCase();
+    pay = g4.join("*");
+  }
   var f = pay.split("*");
   if(f[0]==="2" && f.length>=5){
     var op = OPC[f[2]] || "*";
@@ -349,7 +366,10 @@ function decodeHash(){
     if(!U[id]) id = "";                                   /* 知らない単元は 捨てる */
     if(!(g>=3 && g<=7)) g = 0;
     if(id && U[id].c!=="calc") sub = TIDN[sub] || "";     /* 2文字の 型コードを もどす */
-    else if(!/^[A-Za-z]{0,6}$/.test(sub)) sub = "";
+    else {
+      if(wasAl) sub = sub.replace(/1/g,"L").replace(/2/g,"R");   /* □の位置を もどす */
+      if(!/^[A-Za-z]{0,6}$/.test(sub)) sub = "";
+    }
     if(units.indexOf(id+"."+g)<0) units.push(id+"."+g);
     out.push({q:"", a:esc(showAns(ans[i])), unit:id, unitJa:(U[id] && U[id].ja) || "",
               grade:g, op:op, kind:(U[id] && U[id].c) || "", tid:sub, sub:sub});
