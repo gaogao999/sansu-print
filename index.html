@@ -1928,11 +1928,18 @@ function masuHTML(m){
   return h+'</tbody></table>';
 }
 /* だいめい・小見出し */
+/* 学年の ならびを 書く。とんで いる ときに 「小3〜小5」と 書くと
+   小4も 入って いるように 読めるので、そこは 「小3・小5」と 並べる。 */
+function gradeSpan(g,lang){
+  var i, lg = lang || LANG, nm = function(x){ return GRADENAME[x][lg]; };
+  if(!g.length) return "";
+  if(g.length===1) return nm(g[0]);
+  for(i=1;i<g.length;i++) if(g[i]!==g[i-1]+1) return g.map(nm).join(lg==="en"?", ":"・");
+  return nm(g[0])+(lg==="en"?"–":"〜")+nm(g[g.length-1]);
+}
 function gradeLabel(){
   var g = state.grades.filter(function(x){ return GRADENAME[x]; }).sort(function(a,b){return a-b;});
-  if(!g.length) return "";
-  var f = GRADENAME[g[0]][LANG], l = GRADENAME[g[g.length-1]][LANG];
-  return g.length===1 ? f : f+T("〜","–")+l;
+  return gradeSpan(g);
 }
 function autoTitle(){
   var c = chosenUnits(), head = gradeLabel()+" ";
@@ -2406,7 +2413,7 @@ function fillUnits(){
   var h = '<button type="button" class="all" data-v="*" aria-pressed="'+all+'">'
         + (all ? "ぜんぶ はずす" : "ぜんぶ えらぶ")+'</button>';
   h += vis.map(function(u){
-    var gs = gradesFor(u).map(function(g){ return GRADENAME[g].ja; }).join("");
+    var gs = gradeSpan(gradesFor(u),"ja");
     return '<button type="button" data-v="'+u.id+'" aria-pressed="'+(state.units.indexOf(u.id)>=0)+'">'
          + '<i>'+gs+'</i>'+u.ja+'</button>';
   }).join("");
