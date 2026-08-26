@@ -286,7 +286,7 @@ function pct(a,b){ return b ? Math.round(a/b*100) : 0; }
    2*seed*演算*よこの数*たての数            （100マス）              */
 var OPC = {a:"+", s:"-", m:"*", d:"/", z:""};
 var OPSIGN = {"+":"＋","-":"－","*":"×","/":"÷"};
-var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1", 8:"中2"};
+var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1"};
 function showAns(a){
   return String(a).replace(/(\d)~(\d)/g,"$1/$2")
                   .replace(/(\d)r(\d)/g,"$1 あまり $2")
@@ -617,7 +617,7 @@ var U = {
   atri:{ja:"三角形・四角形の 面積",g:[5],c:"fig"}, angle5:{ja:"三角形・四角形の 角",g:[5],c:"fig"},
   circum:{ja:"円周",g:[5],c:"fig"}, vol5:{ja:"直方体の 体積",g:[5],c:"fig"},
   acirc:{ja:"円の 面積",g:[6],c:"fig"}, vol6:{ja:"角柱・円柱の 体積",g:[6],c:"fig"},
-  angle7:{ja:"平行線と 角",g:[8],c:"fig"}, sector:{ja:"おうぎ形",g:[7],c:"fig"},
+  angle7:{ja:"平行線と 角",g:[7],c:"fig"}, sector:{ja:"おうぎ形",g:[7],c:"fig"},
   vol7:{ja:"円柱・円すいの 体積",g:[7],c:"fig"},
   warith:{ja:"四則の 文章題",g:[3,4],c:"word"}, wtime:{ja:"時こくと 時間",g:[3],c:"word"},
   wunit:{ja:"単位量あたり",g:[5],c:"word"}, wspeed:{ja:"速さ",g:[5,6],c:"word"},
@@ -642,7 +642,7 @@ var PRE = {
 var BASIC = ["int","dec","frac"];              /* ここが 崩れると 先が 全部 苦しい */
 var OPNAME = {"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"};
 var OPCODE = {"+":"a","-":"s","*":"m","/":"d"};
-var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",8:"中2"};
+var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
 
 /* 判断に つかう しきい値。少ない問題数で 言い切らない ための 決めごと。 */
 var OK   = 70,   /* これ未満＝土台が あやしい */
@@ -892,7 +892,7 @@ function levelOf(recs){
     x.n++; if(q.ok) x.ok++;
     if(q.unit) x.u[q.unit] = (x.u[q.unit]||0) + 1;
   }); });
-  var rows = [3,4,5,6,7,8].map(function(g){
+  var rows = [3,4,5,6,7].map(function(g){
     var all = unitsOfGrade(g), x = by[g];
     if(!x) return {g:g, st:"none", n:0, ok:0, r:0, tried:0, all:all.length, rest:all};
     var tried = Object.keys(x.u).filter(function(id){ return x.u[id]>=3; });
@@ -1296,7 +1296,7 @@ function viewAna(){
   }
 
   var a = analyse(recs), us = Object.keys(a.byUnit);
-  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",8:"中2"};
+  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
   /* --- 計算の 種類ごと --- */
   var ops = Object.keys(ad.byOp).filter(function(o){ return ad.byOp[o].n>=3; });
   if(ops.length){

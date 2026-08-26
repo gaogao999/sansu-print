@@ -491,7 +491,7 @@ function T(ja,en){ return LANG==="ja" ? ja : en; }
 function sign(op){ return LANG==="ja" ? OPSIGN[op] : ENSIGN[op]; }
 function eqs(){ return LANG==="ja" ? "＝" : "="; }
 var GRADENAME = {3:{ja:"小3",en:"Gr.3"},4:{ja:"小4",en:"Gr.4"},5:{ja:"小5",en:"Gr.5"},
-                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"},8:{ja:"中2",en:"Gr.8"}};
+                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"}};
 var CATS = [
   {id:"calc", ja:"計算",   en:"Calculation"},
   {id:"fig",  ja:"図形",   en:"Geometry"},
@@ -2059,7 +2059,7 @@ var UNITS = [
   {id:"vol5",    cat:"fig",  g:[5],         ja:"直方体の 体積",         en:"Volume of boxes",      gen:uVol5},
   {id:"acirc",   cat:"fig",  g:[6],         ja:"円の 面積",             en:"Area of circles",      gen:uACirc},
   {id:"vol6",    cat:"fig",  g:[6],         ja:"角柱・円柱の 体積",     en:"Volume of prisms",     gen:uVol6},
-  {id:"angle7",  cat:"fig",  g:[8],         ja:"平行線と 角",           en:"Parallel lines & angles", gen:uAngle7},
+  {id:"angle7",  cat:"fig",  g:[7],         ja:"平行線と 角",           en:"Parallel lines & angles", gen:uAngle7},
   {id:"sector",  cat:"fig",  g:[7],         ja:"おうぎ形",              en:"Sectors",              gen:uSector},
   {id:"vol7",    cat:"fig",  g:[7],         ja:"円柱・円すいの 体積",   en:"Cylinders & cones",    gen:uVol7},
   /* 文章題 */
@@ -2624,9 +2624,8 @@ function render(depth){
   if(!depth){ trimmed = false; probed = false; colCap = 0; }
   if(!chosenUnits().length){
     stage.innerHTML = "";
-    /* その 学年と ぶんやの 組み合わせに 単元が 1つも ない ことが ある
-       （中2は いま 図形の「平行線と 角」だけ）。だまって 白い ままに せず、
-       どの ぶんやなら えらべるかを 言う。 */
+    /* その 学年と ぶんやの 組み合わせに 単元が 1つも ない ことが ある。
+       だまって 白い ままに せず、どの ぶんやなら えらべるかを 言う。 */
     if(!visibleUnits().length){
       var have = CATS.filter(function(c){
         return UNITS.some(function(u){
@@ -2848,7 +2847,7 @@ function fillCount(exact){
   }).join("");
 }
 function fillGrades(){
-  document.getElementById("grade").innerHTML = [3,4,5,6,7,8].map(function(g){
+  document.getElementById("grade").innerHTML = [3,4,5,6,7].map(function(g){
     return '<button type="button" data-v="'+g+'" aria-pressed="'
       + (state.grades.indexOf(g)>=0) + '">'+GRADENAME[g].ja+'</button>';
   }).join("");
@@ -2976,7 +2975,7 @@ function clean(){
   function pickOne(v,list,def){ return list.indexOf(v)>=0 ? v : def; }
   function num(v,lo2,hi2,def){ v = Math.floor(Number(v)); return (isFinite(v)&&v>=lo2&&v<=hi2) ? v : def; }
   st.grades = (Array.isArray(st.grades)?st.grades:[]).map(Number)
-    .filter(function(g){ return [3,4,5,6,7,8].indexOf(g)>=0; });
+    .filter(function(g){ return [3,4,5,6,7].indexOf(g)>=0; });
   if(!st.grades.length) st.grades = [4];
   st.cats = (Array.isArray(st.cats)?st.cats:[]).filter(function(c){
     return CATS.some(function(x){ return x.id===c; }); });
@@ -3053,7 +3052,7 @@ function bindCheck(id,key){
 function fromURL(){
   try{
     var p = new URLSearchParams(location.search), g = Number(p.get("g")), u = p.get("u");
-    if([3,4,5,6,7,8].indexOf(g)>=0) state.grades = [g];
+    if([3,4,5,6,7].indexOf(g)>=0) state.grades = [g];
     var un = u && unitOf(u);
     if(un){
       state.units = [un.id];
