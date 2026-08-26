@@ -286,7 +286,7 @@ function pct(a,b){ return b ? Math.round(a/b*100) : 0; }
    2*seed*演算*よこの数*たての数            （100マス）              */
 var OPC = {a:"+", s:"-", m:"*", d:"/", z:""};
 var OPSIGN = {"+":"＋","-":"－","*":"×","/":"÷"};
-var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1"};
+var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1", 8:"中2"};
 function showAns(a){
   return String(a).replace(/(\d)~(\d)/g,"$1/$2")
                   .replace(/(\d)r(\d)/g,"$1 あまり $2")
@@ -602,6 +602,11 @@ function askPersist(){
 var U = {
   int:{ja:"整数の 四則",g:[3,4,5,6,7],c:"calc"}, hole:{ja:"虫食い算",g:[3,4,5,6],c:"calc"},
   mixed:{ja:"四則混合（かっこ）",g:[4,5,6,7],c:"calc"}, round:{ja:"がい数",g:[4],c:"calc"},
+  bignum:{ja:"大きい 数",g:[3,4],c:"calc"}, dfmix:{ja:"分数と 小数の 混合計算",g:[6,7],c:"calc"},
+  daihyo:{ja:"代表値",g:[6],c:"calc"}, prime:{ja:"素因数分解",g:[7],c:"calc"},
+  tri3:{ja:"二等辺三角形・正三角形",g:[3],c:"fig"}, quad4:{ja:"垂直・平行と 四角形",g:[4],c:"fig"},
+  poly5:{ja:"多角形・正多角形",g:[5],c:"fig"}, sym6:{ja:"線対称・点対称",g:[6],c:"fig"},
+  scale6:{ja:"拡大図・縮図",g:[6],c:"fig"}, surf7:{ja:"立体の 表面積",g:[7],c:"fig"},
   divisor:{ja:"倍数と 約数",g:[5],c:"calc"}, dec:{ja:"小数の 計算",g:[3,4,5,6,7],c:"calc"},
   frac:{ja:"分数の 計算",g:[3,4,5,6,7],c:"calc"}, unit:{ja:"単位の かんさん",g:[3,4,5,6],c:"calc"},
   ratioc:{ja:"割合・百分率",g:[5,6],c:"calc"}, hi:{ja:"比",g:[6],c:"calc"},
@@ -612,7 +617,7 @@ var U = {
   atri:{ja:"三角形・四角形の 面積",g:[5],c:"fig"}, angle5:{ja:"三角形・四角形の 角",g:[5],c:"fig"},
   circum:{ja:"円周",g:[5],c:"fig"}, vol5:{ja:"直方体の 体積",g:[5],c:"fig"},
   acirc:{ja:"円の 面積",g:[6],c:"fig"}, vol6:{ja:"角柱・円柱の 体積",g:[6],c:"fig"},
-  angle7:{ja:"平行線と 角",g:[7],c:"fig"}, sector:{ja:"おうぎ形",g:[7],c:"fig"},
+  angle7:{ja:"平行線と 角",g:[8],c:"fig"}, sector:{ja:"おうぎ形",g:[7],c:"fig"},
   vol7:{ja:"円柱・円すいの 体積",g:[7],c:"fig"},
   warith:{ja:"四則の 文章題",g:[3,4],c:"word"}, wtime:{ja:"時こくと 時間",g:[3],c:"word"},
   wunit:{ja:"単位量あたり",g:[5],c:"word"}, wspeed:{ja:"速さ",g:[5,6],c:"word"},
@@ -628,13 +633,16 @@ var PRE = {
   perim:["int"], arect:["int"], atri:["arect"], angle5:["angle4"], circum:["dec"],
   vol5:["arect"], acirc:["circum"], vol6:["vol5","acirc"], angle7:["angle5"],
   sector:["acirc"], vol7:["vol6"],
+  bignum:["int"], dfmix:["frac","dec"], daihyo:["dec"], prime:["int","divisor"],
+  tri3:["int"], quad4:["tri3"], poly5:["angle5"], sym6:["poly5"],
+  scale6:["ratioc"], surf7:["vol6","circum"],
   warith:["int"], wunit:["int"], wspeed:["wunit"], wratio:["ratioc"],
   waverage:["int"], wfrac:["frac"], whi:["hi"], wcase:["int"], weq:["eq"]
 };
 var BASIC = ["int","dec","frac"];              /* ここが 崩れると 先が 全部 苦しい */
 var OPNAME = {"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"};
 var OPCODE = {"+":"a","-":"s","*":"m","/":"d"};
-var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",8:"中2"};
 
 /* 判断に つかう しきい値。少ない問題数で 言い切らない ための 決めごと。 */
 var OK   = 70,   /* これ未満＝土台が あやしい */
@@ -667,6 +675,12 @@ var FEAT = {
 };
 /* ---- 文章題・図形の「型」 ---- */
 var TID = {
+  tri_name:"三角形の 名まえ", tri_perim:"正三角形の まわりの 長さ", tri_side:"二等辺三角形の のこりの へん",
+  quad_name:"四角形の 名まえ", quad_perim:"四角形の まわりの 長さ", quad_side:"平行四辺形の となりの へん",
+  poly_perim:"正多角形の まわりの 長さ", poly_sum:"多角形の 内角の 和", poly_ang:"正多角形の 1つの 内角",
+  sym_axis:"対称の じくの 数", sym_point:"点対称か どうか",
+  scale_up:"拡大図の へん", scale_down:"縮図の へん", scale_map:"縮尺と じっさいの 長さ",
+  surf_box:"直方体の 表面積", surf_cyl:"円柱の 表面積", surf_ball:"球の 表面積", surf_cone:"円すいの 表面積",
   awase:"あわせて いくつ", morau:"ふえる・もらう", nokori:"のこりは いくつ",
   chigai:"ちがいは いくつ", bai:"何ばい", toubun:"同じ数ずつ 分ける",
   amari:"分けて あまりを 出す", oturi:"おつり", ni_kai:"2だんかいの 問題",
@@ -708,7 +722,13 @@ var TIDC = {                 /* 型の 名まえ → 2文字。QR を 紙に の
   oturi:"1e", para_h:"1f", perim:"1g", perim_side:"1h", rect_area:"1i",
   rect_side:"1j", rect_square:"1k", renzoku:"1l", sougo:"1m", toubun:"1n",
   tri_h:"1o", tsuku:"1p", vol5:"1q", vol5_h:"1r", wakeru:"1s",
-  waru:"1t"
+  waru:"1t",
+  tri_name:"1u", tri_perim:"1v", tri_side:"1w",
+  quad_name:"1x", quad_perim:"1y", quad_side:"1z",
+  poly_perim:"20", poly_sum:"21", poly_ang:"22",
+  sym_axis:"23", sym_point:"24",
+  scale_up:"25", scale_down:"26", scale_map:"27",
+  surf_box:"28", surf_cyl:"29", surf_ball:"2a", surf_cone:"2b"
 };
 var TIDN = {}; for(var _t in TIDC) if(TIDC.hasOwnProperty(_t)) TIDN[TIDC[_t]] = _t;
 
@@ -772,7 +792,16 @@ function trend(list){
 var FEATU = {                               /* 単元に よって 言い方を 変える */
   dec:{ w:{l:"小数を かける・小数で わる", s:"小数×小数・小数÷小数"} },
   int:{ w:{l:"かける数・わる数が 2けた",   s:"2けたを かける・わる", u:"&db=2"} },
-  hole:{w:{l:"かける数・わる数が 2けた",   s:"2けたを かける・わる", u:"&db=2"} }
+  hole:{w:{l:"かける数・わる数が 2けた",   s:"2けたを かける・わる", u:"&db=2"} },
+  dfmix:{ d:{l:"小数が まざる",            s:"小数を 分数に なおす"} },
+  bignum:{g:{l:"10倍・100倍・1000倍",      s:"10倍・100倍"},
+          d:{l:"1/10・1/100",              s:"1/10・1/100"},
+          k:{l:"何こ あつめた 数か",        s:"位ごとの まとまり"} },
+  daihyo:{c:{l:"平均値",                   s:"平均値"},
+          n:{l:"中央値（ならべかえ）",      s:"中央値"},
+          m:{l:"最頻値",                   s:"最頻値"} },
+  prime:{ t:{l:"素数 2つの 積",            s:"素因数 2つ"},
+          g:{l:"素数 3つ以上の 積",         s:"素因数 3つ以上"} }
 };
 function featOf(id,c){ return (FEATU[id] && FEATU[id][c]) || FEAT[c]; }
 function splitOf(list, id){
@@ -863,7 +892,7 @@ function levelOf(recs){
     x.n++; if(q.ok) x.ok++;
     if(q.unit) x.u[q.unit] = (x.u[q.unit]||0) + 1;
   }); });
-  var rows = [3,4,5,6,7].map(function(g){
+  var rows = [3,4,5,6,7,8].map(function(g){
     var all = unitsOfGrade(g), x = by[g];
     if(!x) return {g:g, st:"none", n:0, ok:0, r:0, tried:0, all:all.length, rest:all};
     var tried = Object.keys(x.u).filter(function(id){ return x.u[id]>=3; });
@@ -1133,7 +1162,8 @@ function advise(recs){
   if(!weakCount && total>=12){
     var gs = {}; ids.forEach(function(id){ gs[byU[id].g] = 1; });
     var g = Object.keys(gs).map(Number).sort(function(a,b){return a-b;}).pop();
-    var order = ["int","hole","dec","frac","mixed","divisor","unit","ratioc","hi","letter","prop","neg","eq"];
+    var order = ["int","bignum","hole","dec","frac","dfmix","mixed","divisor","prime",
+                 "unit","ratioc","hi","daihyo","letter","prop","neg","eq"];
     if(g){
       var rest = Object.keys(U).filter(function(id){ return U[id].g.indexOf(g)>=0 && !byU[id]; })
         .sort(function(a,b){
@@ -1266,7 +1296,7 @@ function viewAna(){
   }
 
   var a = analyse(recs), us = Object.keys(a.byUnit);
-  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",8:"中2"};
   /* --- 計算の 種類ごと --- */
   var ops = Object.keys(ad.byOp).filter(function(o){ return ad.byOp[o].n>=3; });
   if(ops.length){

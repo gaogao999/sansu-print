@@ -491,7 +491,7 @@ function T(ja,en){ return LANG==="ja" ? ja : en; }
 function sign(op){ return LANG==="ja" ? OPSIGN[op] : ENSIGN[op]; }
 function eqs(){ return LANG==="ja" ? "＝" : "="; }
 var GRADENAME = {3:{ja:"小3",en:"Gr.3"},4:{ja:"小4",en:"Gr.4"},5:{ja:"小5",en:"Gr.5"},
-                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"}};
+                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"},8:{ja:"中2",en:"Gr.8"}};
 var CATS = [
   {id:"calc", ja:"計算",   en:"Calculation"},
   {id:"fig",  ja:"図形",   en:"Geometry"},
@@ -1263,6 +1263,21 @@ function coneSVG(r,h){
     + '<path d="M66 76 H98"/>' + tx(78,62, r+" cm","middle",9)
     + vdim(110,16,76, h+" cm"));
 }
+/* 円すい。高さでは なく 母線に 印を つける */
+function coneSlantSVG(r,sl){
+  return svg(140,100,
+      '<ellipse cx="66" cy="76" rx="32" ry="10"/>'
+    + '<path d="M34 76 L66 16 L98 76"/>'
+    + '<path d="M66 76 H98"/>' + tx(82,72, r+" cm","middle",9)
+    + tx(44,44, sl+" cm","end",9));
+}
+function ballSVG(r){
+  return svg(140,100,
+      '<circle cx="66" cy="52" r="34"/>'
+    + '<path d="M32 52 A34 12 0 0 0 100 52"/>' + dash("M32 52 A34 12 0 0 1 100 52")
+    + '<path d="M66 52 H100"/>' + tx(84,48, r+" cm","middle",9)
+    + '<circle cx="66" cy="52" r="1.6" fill="currentColor" stroke="none"/>');
+}
 function prismSVG(b,th,h){
   return svg(140,102,
       '<path d="M44 70 L106 70 L75 26 Z"/>'
@@ -1665,6 +1680,345 @@ function uWEq(rand,o){
     String(start));
 }
 
+
+/* ==========================================================
+   たしたぶん（内容系統一覧表の 穴うめ）
+   ========================================================== */
+
+/* 大きい数（小3＝1億まで／小4＝億・兆）*/
+function uBigNum(rand,o){
+  var k = cyc(["tou","waru","atsume"],o), big = o.grade>=4;
+  var base = big ? pick(rand,[100000000,1000000000000]) : pick(rand,[10000,100000,1000000]);
+  var unitJa = {10000:"1万",100000:"10万",1000000:"100万",100000000:"1億",1000000000000:"1兆"}[base];
+  var unitEn = {10000:"10 thousand",100000:"100 thousand",1000000:"1 million",
+                100000000:"100 million",1000000000000:"1 trillion"}[base];
+  if(k==="atsume"){
+    var c = ri(rand,2,9)*10 + ri(rand,1,9), v = c*base;
+    return {kind:"calc", long:true, sub:"k", key:"bn3"+v+"_"+base,
+      ex:T(v+" は "+unitJa+" を 何こ あつめた 数ですか。",
+           "How many "+unitEn+"s make "+v+"?"),
+      eq:"", ans:String(c)};
+  }
+  var n = big ? ri(rand,12,987)*1000000 : ri(rand,12,987)*100;
+  if(k==="tou"){
+    var t = pick(rand,[10,100,1000]);
+    return {kind:"calc", long:true, sub:"g", key:"bn1"+n+"_"+t,
+      ex:T(n+" を "+t+"倍 した 数は。", "What is "+n+" multiplied by "+t+"?"),
+      eq:"", ans:String(n*t)};
+  }
+  var d = pick(rand,[10,100]);
+  while(n % d !== 0) n *= 10;
+  return {kind:"calc", long:true, sub:"d", key:"bn2"+n+"_"+d,
+    ex:T(n+" を "+d+" で わった 数（"+(d===10?"1/10":"1/100")+"）は。",
+         "What is "+n+" divided by "+d+"?"),
+    eq:"", ans:String(n/d)};
+}
+
+/* 分数・小数・整数の 混合計算（小6・中1）*/
+function uDfMix(rand,o){
+  var DEC = [[1,2],[1,4],[3,4],[1,5],[2,5],[3,5],[4,5],[1,10],[3,10],[7,10],[1,20]];
+  var pat = cyc([1,2,3,4],o), N,D,ex,sub="d";
+  var f = DEC[Math.floor(rand()*DEC.length)];
+  var dec = num1(f[0]/f[1]);                       /* 0.5 のような きれいな 小数 */
+  /* 出す 分数は 約分ずみ に する（2/6 の ような 形は 出さない）*/
+  var d1 = ri(rand,3,9), n1 = ri(rand,1,d1-1), gg = gcd(n1,d1);
+  n1 /= gg; d1 /= gg;
+  if(d1<2) return null;
+  if(pat===1){                                     /* 分数 ＋ 小数 */
+    N = n1*f[1] + f[0]*d1; D = d1*f[1];
+    ex = frHTML(n1,d1)+" ＋ "+dec;
+  }else if(pat===2){                               /* 小数 － 分数 */
+    N = f[0]*d1 - n1*f[1]; D = d1*f[1];
+    if(N<=0) return null;
+    ex = dec+" － "+frHTML(n1,d1);
+  }else if(pat===3){                               /* 分数 × 小数 */
+    N = n1*f[0]; D = d1*f[1];
+    ex = frHTML(n1,d1)+" × "+dec;
+  }else{                                           /* 整数 ÷ 小数 ＋ 分数（かっこ）*/
+    var w = ri(rand,2,9);
+    N = w*f[1]*d1 + n1*f[0]; D = f[0]*d1;
+    ex = "( "+w+" ÷ "+dec+" ) ＋ "+frHTML(n1,d1);
+    sub += "p";
+  }
+  if(!D || N<=0) return null;
+  if(gcd(N,D)>1 && N!==D) sub += "y";
+  if(N>D && D>1) sub += "m";
+  return {kind:"calc", sub:sub, key:"dm"+pat+"_"+n1+"/"+d1+"_"+dec,
+    ex:ex, eq:eqs(), ans:fracAnsHTML(N,D)};
+}
+
+/* 代表値（小6）＝平均値・中央値・最頻値 */
+function uDaihyo(rand,o){
+  var k = cyc(["hei","chu","sai"],o), n = k==="chu" ? pick(rand,[5,7]) : pick(rand,[5,6]);
+  var v = [], i;
+  if(k==="sai"){
+    var hit = ri(rand,2,9);
+    v = [hit,hit,hit];
+    while(v.length<6){
+      var x = ri(rand,1,9);
+      if(x!==hit && v.filter(function(y){return y===x;}).length<2) v.push(x);
+    }
+  }else{
+    for(i=0;i<n;i++) v.push(ri(rand,1,20));
+    if(k==="hei"){                                  /* わりきれる ように そろえる */
+      var sum = 0; for(i=0;i<n;i++) sum += v[i];
+      var fix = (n - (sum % n)) % n;
+      v[0] += fix;
+      if(v[0]>30) return null;
+    }
+  }
+  /* ならびは でたらめ。中央値は ならべかえて 求めさせる */
+  for(i=v.length-1;i>0;i--){ var j=Math.floor(rand()*(i+1)), t=v[i]; v[i]=v[j]; v[j]=t; }
+  var srt = v.slice().sort(function(x,y){ return x-y; }), ans;
+  if(k==="hei"){ var s2=0; for(i=0;i<v.length;i++) s2+=v[i]; ans = num1(s2/v.length); }
+  else if(k==="chu") ans = String(srt[(srt.length-1)/2]);
+  else {
+    var cnt = {}, best = srt[0];
+    srt.forEach(function(x){ cnt[x]=(cnt[x]||0)+1; if(cnt[x]>cnt[best]) best=x; });
+    if(cnt[best]<3) return null;
+    ans = String(best);
+  }
+  var nameJa = {hei:"平均値",chu:"中央値",sai:"最頻値"}[k];
+  var nameEn = {hei:"mean",chu:"median",sai:"mode"}[k];
+  return {kind:"calc", long:true, sub:{hei:"c",chu:"n",sai:"m"}[k], key:"dh"+k+v.join("_"),
+    ex:T(v.join("，")+" の "+nameJa+"は。", "Find the "+nameEn+" of "+v.join(", ")+"."),
+    eq:"", ans:ans};
+}
+
+/* 素因数分解（中1）*/
+function uPrime(rand,o){
+  var PR = [2,3,5,7,11,13], k = pick(rand,[2,3]), f = [], i, n = 1;
+  for(i=0;i<k;i++){ var q = PR[Math.floor(rand()*(k===3?4:PR.length))]; f.push(q); n *= q; }
+  if(n<6 || n>999) return null;
+  f.sort(function(a,b){ return a-b; });
+  var pr = f.length===2 && f[0]!==f[1] ? "t" : "g";
+  return {kind:"calc", long:true, sub:pr, key:"pf"+n,
+    ex:T(n+" を 素因数分解 すると。", "Write "+n+" as a product of prime factors."),
+    eq:"", ans:f.join("×")};
+}
+
+/* 立体の 表面積（中1）*/
+function uSurf(rand,o){
+  var k = cyc(["box","cyl","ball","cone"],o);
+  if(k==="box"){
+    var a = ri(rand,2,9), b = ri(rand,2,9), c = ri(rand,2,9);
+    return {kind:"fig", tid:"surf_box", key:"sb"+a+"_"+b+"_"+c, fig:boxSVG(a,b,c),
+      q: ask("よこ "+a+"cm、たて "+b+"cm、高さ "+c+"cm の 直方体の 表面積は。",
+             "Find the surface area of a box "+a+" cm by "+b+" cm by "+c+" cm."),
+      ans: (2*(a*b+b*c+c*a))+" "+u2()};
+  }
+  if(k==="ball"){
+    var r = ri(rand,2,9);
+    return {kind:"fig", tid:"surf_ball", key:"sl"+r, fig:ballSVG(r),
+      q: ask("半径 "+r+"cm の 球の 表面積は。（π を つかう）",
+             "Find the surface area of a sphere with radius "+r+" cm. (use π)"),
+      ans: (4*r*r)+"π "+u2()};
+  }
+  if(k==="cyl"){
+    var r2 = ri(rand,2,9), h = ri(rand,3,12);
+    return {kind:"fig", tid:"surf_cyl", key:"sc"+r2+"_"+h, fig:cylSVG(r2,h),
+      q: ask("底面の 半径 "+r2+"cm、高さ "+h+"cm の 円柱の 表面積は。（π を つかう）",
+             "Find the surface area of a cylinder with radius "+r2+" cm and height "+h+" cm. (use π)"),
+      ans: (2*r2*r2 + 2*r2*h)+"π "+u2()};
+  }
+  var r3 = ri(rand,2,8), sl = r3 + ri(rand,2,8);        /* 母線は 半径より 長い */
+  return {kind:"fig", tid:"surf_cone", key:"sn"+r3+"_"+sl, fig:coneSlantSVG(r3,sl),
+    q: ask("底面の 半径 "+r3+"cm、母線 "+sl+"cm の 円すいの 表面積は。（π を つかう）",
+           "Find the surface area of a cone with base radius "+r3+" cm and slant height "+sl+" cm. (use π)"),
+    ans: (r3*r3 + r3*sl)+"π "+u2()};
+}
+
+
+/* 二等辺三角形・正三角形（小3）。度（°）は 小4なので 長さで 聞く */
+function uTri3(rand,o){
+  var k = cyc(["name","perim","side"],o);
+  var a = ri(rand,3,12), b = ri(rand,3,12);
+  if(k==="name"){
+    var eq = rand()<0.4, x, y, z;
+    if(eq){ x=y=z=a; } else { x=y=a; z=b; if(z===a) z = a<12 ? a+1 : a-1; if(2*x<=z) return null; }
+    return {kind:"fig", tid:"tri_name", key:"t3n"+x+"_"+y+"_"+z, fig:triSideSVG(x,y,z),
+      q: ask("3つの へんが "+x+"cm、"+y+"cm、"+z+"cm の 三角形です。何三角形ですか。",
+             "A triangle has sides "+x+" cm, "+y+" cm and "+z+" cm. What kind of triangle is it?"),
+      ans: eq ? T("正三角形","equilateral") : T("二等辺三角形","isosceles")};
+  }
+  if(k==="perim"){
+    return {kind:"fig", tid:"tri_perim", key:"t3p"+a, fig:triSideSVG(a,a,a),
+      q: ask("1つの へんが "+a+"cm の 正三角形です。まわりの 長さは 何cmですか。",
+             "An equilateral triangle has sides of "+a+" cm. What is its perimeter?"),
+      ans: (3*a)+" cm"};
+  }
+  var s2 = ri(rand,4,12), base = ri(rand,2,2*s2-1);
+  return {kind:"fig", tid:"tri_side", key:"t3s"+s2+"_"+base, fig:triSideSVG(s2,s2,"?"),
+    q: ask("まわりの 長さが "+(2*s2+base)+"cm、等しい 2つの へんが "+s2+"cm の 二等辺三角形です。のこりの へんは 何cmですか。",
+           "An isosceles triangle has a perimeter of "+(2*s2+base)+" cm and two equal sides of "+s2+" cm. How long is the third side?"),
+    ans: base+" cm"};
+}
+function triSideSVG(x,y,z){
+  /* 等しい へんには 同じ 印を つける。正三角形は 3本とも 印を つける
+     （2本だけだと 二等辺三角形に 見えて しまう）。 */
+  var iso = x===y, eq = x===y && y===z;
+  return svg(140,94,
+      '<path d="M22 74 L110 74 L66 20 Z"/>'
+    + tx(38,44, x+" cm","end",9) + tx(96,44, y+" cm","start",9)
+    + tx(66,86, z+" cm","middle", z==="?"?11:9)
+    + (iso ? '<path d="M40 49 l6 3"/><path d="M92 49 l-6 3"/>' : "")
+    + (eq ? '<path d="M66 71 v6"/>' : ""));
+}
+
+/* 垂直・平行と 四角形（小4）*/
+function uQuad4(rand,o){
+  var k = cyc(["name","perim","side"],o);
+  var w = ri(rand,4,14), h = ri(rand,3,12);
+  if(w===h) h = h<12 ? h+1 : h-1;
+  if(k==="name"){
+    var t = pick(rand,["para","rhom","trap","rect","squa"]);
+    var q = {para:T("むかい合う 2くみの へんが 平行で、へんの 長さは となりどうし ちがいます。",
+                    "Both pairs of opposite sides are parallel, and neighbouring sides differ in length."),
+             rhom:T("むかい合う 2くみの へんが 平行で、4つの へんの 長さが みんな 同じです。",
+                    "Both pairs of opposite sides are parallel and all four sides are the same length."),
+             trap:T("むかい合う へんの うち、1くみだけが 平行です。",
+                    "Only one pair of opposite sides is parallel."),
+             rect:T("4つの 角が みんな 直角で、へんの 長さは となりどうし ちがいます。",
+                    "All four angles are right angles, and neighbouring sides differ in length."),
+             squa:T("4つの 角が みんな 直角で、4つの へんの 長さが みんな 同じです。",
+                    "All four angles are right angles and all four sides are the same length.")}[t];
+    return {kind:"fig", tid:"quad_name", key:"q4n"+t, fig:quadSVG(t),
+      q: ask(q+"この 四角形の 名まえは。", q+" What is this quadrilateral called?"),
+      ans: {para:T("平行四辺形","parallelogram"), rhom:T("ひし形","rhombus"),
+            trap:T("台形","trapezium"), rect:T("長方形","rectangle"),
+            squa:T("正方形","square")}[t]};
+  }
+  if(k==="perim"){
+    var rh = rand()<0.4;
+    if(rh) return {kind:"fig", tid:"quad_perim", key:"q4pr"+w, fig:quadSVG("rhom"),
+      q: ask("1つの へんが "+w+"cm の ひし形です。まわりの 長さは 何cmですか。",
+             "A rhombus has sides of "+w+" cm. What is its perimeter?"),
+      ans: (4*w)+" cm"};
+    return {kind:"fig", tid:"quad_perim", key:"q4p"+w+"_"+h, fig:quadSVG("para"),
+      q: ask("となり合う へんが "+w+"cm と "+h+"cm の 平行四辺形です。まわりの 長さは 何cmですか。",
+             "A parallelogram has neighbouring sides of "+w+" cm and "+h+" cm. What is its perimeter?"),
+      ans: (2*(w+h))+" cm"};
+  }
+  return {kind:"fig", tid:"quad_side", key:"q4s"+w+"_"+h, fig:quadSVG("para"),
+    q: ask("まわりの 長さが "+(2*(w+h))+"cm、1つの へんが "+w+"cm の 平行四辺形です。となりの へんは 何cmですか。",
+           "A parallelogram has a perimeter of "+(2*(w+h))+" cm and one side of "+w+" cm. How long is the neighbouring side?"),
+    ans: h+" cm"};
+}
+function quadSVG(t){
+  var d = t==="para" ? "M28 72 L92 72 L112 28 L48 28 Z"
+        : t==="rhom" ? "M22 50 L66 22 L110 50 L66 78 Z"
+        : t==="rect" ? "M26 66 L106 66 L106 28 L26 28 Z"
+        : t==="squa" ? "M38 74 L94 74 L94 18 L38 18 Z"
+        : "M24 72 L116 72 L96 28 L44 28 Z";
+  return svg(140,94,'<path d="'+d+'"/>');
+}
+
+/* 多角形・正多角形（小5）*/
+function uPoly5(rand,o){
+  var k = cyc(["perim","sum","ang"],o), n = pick(rand,[5,6,8,9,10,12]);
+  var nameJa = {3:"正三角形",4:"正方形",5:"正五角形",6:"正六角形",8:"正八角形",
+                9:"正九角形",10:"正十角形",12:"正十二角形"}[n];
+  var nameEn = "regular "+n+"-gon";
+  if(k==="perim"){
+    var a = ri(rand,3,15);
+    return {kind:"fig", tid:"poly_perim", key:"p5p"+n+"_"+a, fig:polySVG(n),
+      q: ask("1つの へんが "+a+"cm の "+nameJa+"です。まわりの 長さは 何cmですか。",
+             "A "+nameEn+" has sides of "+a+" cm. What is its perimeter?"),
+      ans: (n*a)+" cm"};
+  }
+  if(k==="sum"){
+    var m = pick(rand,[4,5,6,7,8]);
+    return {kind:"fig", tid:"poly_sum", key:"p5s"+m, fig:polySVG(m),
+      q: ask(m+"角形の 内角の 和は 何度ですか。",
+             "What is the sum of the interior angles of a "+m+"-sided polygon?"),
+      ans: (180*(m-2))+"°"};
+  }
+  if(180*(n-2) % n !== 0) return null;
+  return {kind:"fig", tid:"poly_ang", key:"p5a"+n, fig:polySVG(n),
+    q: ask(nameJa+"の 1つの 内角は 何度ですか。",
+           "What is one interior angle of a "+nameEn+"?"),
+    ans: (180*(n-2)/n)+"°"};
+}
+function polySVG(n){
+  var pts = [], i, cx = 66, cy = 47, r = 30;
+  for(i=0;i<n;i++){
+    var t = -Math.PI/2 + 2*Math.PI*i/n;
+    pts.push((cx+r*Math.cos(t)).toFixed(1)+" "+(cy+r*Math.sin(t)).toFixed(1));
+  }
+  return svg(140,94,'<path d="M'+pts.join(" L")+' Z"/>');
+}
+
+/* 線対称・点対称（小6）*/
+/* 正多角形だけだと 数が 足りないので、小6で 扱う 四角形・三角形も 入れる。
+   台形は 等脚か どうかで 答えが 変わるので 出さない。 */
+var SYM6 = [
+  {ja:"二等辺三角形", en:"an isosceles triangle", axis:1, pt:false, d:"tri"},
+  {ja:"正三角形",     en:"an equilateral triangle", axis:3, pt:false, d:"eq"},
+  {ja:"長方形",       en:"a rectangle",     axis:2, pt:true,  d:"rect"},
+  {ja:"正方形",       en:"a square",        axis:4, pt:true,  d:"squa"},
+  {ja:"ひし形",       en:"a rhombus",       axis:2, pt:true,  d:"rhom"},
+  {ja:"平行四辺形",   en:"a parallelogram", axis:0, pt:true,  d:"para"},
+  {ja:"正五角形",  en:"a regular pentagon", axis:5, pt:false, d:5},
+  {ja:"正六角形",  en:"a regular hexagon",  axis:6, pt:true,  d:6},
+  {ja:"正七角形",  en:"a regular heptagon", axis:7, pt:false, d:7},
+  {ja:"正八角形",  en:"a regular octagon",  axis:8, pt:true,  d:8},
+  {ja:"正九角形",  en:"a regular nonagon",  axis:9, pt:false, d:9},
+  {ja:"正十角形",  en:"a regular decagon",  axis:10,pt:true,  d:10},
+  {ja:"正十二角形",en:"a regular 12-gon",   axis:12,pt:true,  d:12}
+];
+function symSVG(d){
+  if(d==="tri") return triSideSVG("","","");
+  if(d==="eq")  return svg(140,94,'<path d="M22 74 L110 74 L66 20 Z"/>'
+    + '<path d="M40 49 l6 3"/><path d="M92 49 l-6 3"/><path d="M66 71 v6"/>');
+  if(typeof d === "number") return polySVG(d);
+  return quadSVG(d);
+}
+function uSym6(rand,o){
+  var k = cyc(["axis","point"],o), f = SYM6[Math.floor(rand()*SYM6.length)];
+  if(k==="axis"){
+    return {kind:"fig", tid:"sym_axis", key:"s6a"+f.ja, fig:symSVG(f.d),
+      q: ask(f.ja+"の 対称の じくは 何本 ありますか。",
+             "How many lines of symmetry does "+f.en+" have?"),
+      ans: T(f.axis+"本", String(f.axis))};
+  }
+  return {kind:"fig", tid:"sym_point", key:"s6p"+f.ja, fig:symSVG(f.d),
+    q: ask(f.ja+"は 点対称な 図形ですか。「はい」か「いいえ」で 答えなさい。",
+           "Is "+f.en+" point-symmetric? Answer yes or no."),
+    ans: f.pt ? T("はい","yes") : T("いいえ","no")};
+}
+
+/* 拡大図・縮図（小6）*/
+function uScale6(rand,o){
+  var k = cyc(["up","down","map"],o);
+  if(k==="up"){
+    var m = pick(rand,[2,3,4]), a = ri(rand,2,15);
+    return {kind:"fig", tid:"scale_up", key:"sc6u"+m+"_"+a, fig:scaleSVG(m),
+      q: ask(a+"cm の へんを "+m+"倍の 拡大図に すると、その へんは 何cmに なりますか。",
+             "In a "+m+"-times enlargement, how long does a "+a+" cm side become?"),
+      ans: (a*m)+" cm"};
+  }
+  if(k==="down"){
+    var d = pick(rand,[2,3,4]), b = ri(rand,2,12)*d;
+    return {kind:"fig", tid:"scale_down", key:"sc6d"+d+"_"+b, fig:scaleSVG(1/d),
+      q: ask(b+"cm の へんを 1/"+d+" の 縮図に すると、その へんは 何cmに なりますか。",
+             "In a 1/"+d+" reduction, how long does a "+b+" cm side become?"),
+      ans: (b/d)+" cm"};
+  }
+  var sc = pick(rand,[1000,2000,5000,10000]), cm = ri(rand,2,9);
+  var realM = sc*cm/100;
+  return {kind:"fig", tid:"scale_map", key:"sc6m"+sc+"_"+cm, fig:scaleSVG(2),
+    q: ask("縮尺 1/"+sc+" の 地図で "+cm+"cm の 長さは、じっさいには 何mですか。",
+           "On a map with scale 1/"+sc+", how many metres does "+cm+" cm represent?"),
+    ans: num1(realM)+" m"};
+}
+function scaleSVG(m){
+  var big = m>=1;
+  return svg(140,94,
+      '<path d="M20 70 L56 70 L38 34 Z"/>'
+    + '<path d="M72 74 L128 74 L100 20 Z"'+(big?'':' stroke-dasharray="4 3"')+'/>'
+    + tx(38,86,"もと","middle",8) + tx(100,86, big?"拡大":"縮小","middle",8));
+}
+
 /* ==========================================================
    たんげん一覧（小3〜中1）
    ========================================================== */
@@ -1672,6 +2026,10 @@ var UNITS = [
   /* 計算 */
   {id:"int",     cat:"calc", g:[3,4,5,6,7], ja:"整数の 四則",           en:"Whole numbers",        gen:uInt,   forms:["yoko","hissan","masu"], ops:1, opts:["digits","carry","div"]},
   {id:"mixed",   cat:"calc", g:[4,5,6,7],   ja:"四則混合（かっこ）",    en:"Order of operations",  gen:uMixed, opts:["paren"]},
+  {id:"bignum",  cat:"calc", g:[3,4],       ja:"大きい 数",             en:"Large numbers",        gen:uBigNum},
+  {id:"dfmix",   cat:"calc", g:[6,7],       ja:"分数と 小数の 混合計算", en:"Fractions & decimals", gen:uDfMix},
+  {id:"daihyo",  cat:"calc", g:[6],         ja:"代表値",                en:"Mean, median, mode",   gen:uDaihyo},
+  {id:"prime",   cat:"calc", g:[7],         ja:"素因数分解",            en:"Prime factorisation",  gen:uPrime},
   {id:"hole",    cat:"calc", g:[3,4,5,6],   ja:"虫食い算（□を もとめる）", en:"Missing numbers", gen:uHole, ops:1, opts:["digits"]},
   {id:"round",   cat:"calc", g:[4],         ja:"がい数（四捨五入）",    en:"Rounding",             gen:uRound},
   {id:"divisor", cat:"calc", g:[5],         ja:"倍数と 約数",           en:"Multiples & factors",  gen:uDivisor},
@@ -1685,6 +2043,12 @@ var UNITS = [
   {id:"neg",     cat:"calc", g:[7],         ja:"正負の数",              en:"Positive & negative numbers", gen:uNeg, ops:1, opts:["neg"]},
   {id:"eq",      cat:"calc", g:[7],         ja:"一次方程式",            en:"Linear equations",     gen:uEq,    opts:["eq"]},
   /* 図形 */
+  {id:"tri3",    cat:"fig",  g:[3],         ja:"二等辺三角形・正三角形", en:"Triangles",           gen:uTri3},
+  {id:"quad4",   cat:"fig",  g:[4],         ja:"垂直・平行と 四角形",   en:"Quadrilaterals",       gen:uQuad4},
+  {id:"poly5",   cat:"fig",  g:[5],         ja:"多角形・正多角形",      en:"Polygons",             gen:uPoly5},
+  {id:"sym6",    cat:"fig",  g:[6],         ja:"線対称・点対称",        en:"Symmetry",             gen:uSym6},
+  {id:"scale6",  cat:"fig",  g:[6],         ja:"拡大図・縮図",          en:"Scale drawings",       gen:uScale6},
+  {id:"surf7",   cat:"fig",  g:[7],         ja:"立体の 表面積",         en:"Surface area",         gen:uSurf},
   {id:"circle3", cat:"fig",  g:[3],         ja:"円と 球",               en:"Circles & spheres",    gen:uCircle3},
   {id:"perim",   cat:"fig",  g:[3,4],       ja:"まわりの 長さ",         en:"Perimeter",            gen:uPerim},
   {id:"arect",   cat:"fig",  g:[4],         ja:"長方形・正方形の 面積", en:"Area of rectangles",   gen:uARect},
@@ -1695,7 +2059,7 @@ var UNITS = [
   {id:"vol5",    cat:"fig",  g:[5],         ja:"直方体の 体積",         en:"Volume of boxes",      gen:uVol5},
   {id:"acirc",   cat:"fig",  g:[6],         ja:"円の 面積",             en:"Area of circles",      gen:uACirc},
   {id:"vol6",    cat:"fig",  g:[6],         ja:"角柱・円柱の 体積",     en:"Volume of prisms",     gen:uVol6},
-  {id:"angle7",  cat:"fig",  g:[7],         ja:"平行線と 角",           en:"Parallel lines & angles", gen:uAngle7},
+  {id:"angle7",  cat:"fig",  g:[8],         ja:"平行線と 角",           en:"Parallel lines & angles", gen:uAngle7},
   {id:"sector",  cat:"fig",  g:[7],         ja:"おうぎ形",              en:"Sectors",              gen:uSector},
   {id:"vol7",    cat:"fig",  g:[7],         ja:"円柱・円すいの 体積",   en:"Cylinders & cones",    gen:uVol7},
   /* 文章題 */
@@ -1799,6 +2163,10 @@ function optsOf(u,grade){
     d.grade = grade;
     if(!d.ops.length) d.ops = unitDefaults(u.id,grade).ops;
   }
+  /* 1けた − 1けた では くり下がりが 起きない。ここで 押さえて おかないと
+     設定の 入り口に よっては 白紙に なる（画面では syncUI が 直すが、
+     URL や 保存データから 直に 来た ときの ため）。 */
+  if(d.carry==="only" && d.ops && d.ops.indexOf("-")>=0 && d.da < 2) d.da = 2;
   return d;
 }
 
@@ -2081,7 +2449,14 @@ var TIDC = {                 /* 型の 名まえ → 2文字。QR を 紙に の
   oturi:"1e", para_h:"1f", perim:"1g", perim_side:"1h", rect_area:"1i",
   rect_side:"1j", rect_square:"1k", renzoku:"1l", sougo:"1m", toubun:"1n",
   tri_h:"1o", tsuku:"1p", vol5:"1q", vol5_h:"1r", wakeru:"1s",
-  waru:"1t"
+  waru:"1t",
+  /* たしたぶん */
+  tri_name:"1u", tri_perim:"1v", tri_side:"1w",
+  quad_name:"1x", quad_perim:"1y", quad_side:"1z",
+  poly_perim:"20", poly_sum:"21", poly_ang:"22",
+  sym_axis:"23", sym_point:"24",
+  scale_up:"25", scale_down:"26", scale_map:"27",
+  surf_box:"28", surf_cyl:"29", surf_ball:"2a", surf_cone:"2b"
 };
 /* さいてん画面に わたす 中身。単元・演算・型・むずかしさを 入れて、分析が できるように する */
 /* ぜんぶ 同じ文字なら 1文字だけ 書く（読む がわで ふくらませる） */
@@ -2249,7 +2624,27 @@ function render(depth){
   if(!depth){ trimmed = false; probed = false; colCap = 0; }
   if(!chosenUnits().length){
     stage.innerHTML = "";
-    w.textContent = "たんげんを 1つ以上 えらんでください。";
+    /* その 学年と ぶんやの 組み合わせに 単元が 1つも ない ことが ある
+       （中2は いま 図形の「平行線と 角」だけ）。だまって 白い ままに せず、
+       どの ぶんやなら えらべるかを 言う。 */
+    if(!visibleUnits().length){
+      var have = CATS.filter(function(c){
+        return UNITS.some(function(u){
+          if(u.cat!==c.id) return false;
+          for(var i=0;i<u.g.length;i++) if(st.grades.indexOf(u.g[i])>=0) return true;
+          return false;
+        });
+      }).map(function(c){ return c[LANG]; });
+      var now = CATS.filter(function(c){ return st.cats.indexOf(c.id)>=0; })
+                    .map(function(c){ return c[LANG]; }).join(T("・",", "));
+      w.textContent = have.length
+        ? T(gradeLabel()+"の「"+now+"」は まだ ありません。「"+have.join("・")+"」なら えらべます。",
+            "There is nothing for "+gradeLabel()+" "+now+" yet. Try "+have.join(" or ")+".")
+        : T(gradeLabel()+"の 単元は まだ ありません。学年を えらびなおして ください。",
+            "There is nothing for "+gradeLabel()+" yet. Please choose another grade.");
+    } else {
+      w.textContent = T("たんげんを 1つ以上 えらんでください。","Choose at least one topic.");
+    }
     w.hidden = false;
     return;
   }
@@ -2453,7 +2848,7 @@ function fillCount(exact){
   }).join("");
 }
 function fillGrades(){
-  document.getElementById("grade").innerHTML = [3,4,5,6,7].map(function(g){
+  document.getElementById("grade").innerHTML = [3,4,5,6,7,8].map(function(g){
     return '<button type="button" data-v="'+g+'" aria-pressed="'
       + (state.grades.indexOf(g)>=0) + '">'+GRADENAME[g].ja+'</button>';
   }).join("");
@@ -2581,7 +2976,7 @@ function clean(){
   function pickOne(v,list,def){ return list.indexOf(v)>=0 ? v : def; }
   function num(v,lo2,hi2,def){ v = Math.floor(Number(v)); return (isFinite(v)&&v>=lo2&&v<=hi2) ? v : def; }
   st.grades = (Array.isArray(st.grades)?st.grades:[]).map(Number)
-    .filter(function(g){ return [3,4,5,6,7].indexOf(g)>=0; });
+    .filter(function(g){ return [3,4,5,6,7,8].indexOf(g)>=0; });
   if(!st.grades.length) st.grades = [4];
   st.cats = (Array.isArray(st.cats)?st.cats:[]).filter(function(c){
     return CATS.some(function(x){ return x.id===c; }); });
@@ -2658,7 +3053,7 @@ function bindCheck(id,key){
 function fromURL(){
   try{
     var p = new URLSearchParams(location.search), g = Number(p.get("g")), u = p.get("u");
-    if([3,4,5,6,7].indexOf(g)>=0) state.grades = [g];
+    if([3,4,5,6,7,8].indexOf(g)>=0) state.grades = [g];
     var un = u && unitOf(u);
     if(un){
       state.units = [un.id];
