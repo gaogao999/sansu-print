@@ -490,8 +490,11 @@ var LANG   = "ja";
 function T(ja,en){ return LANG==="ja" ? ja : en; }
 function sign(op){ return LANG==="ja" ? OPSIGN[op] : ENSIGN[op]; }
 function eqs(){ return LANG==="ja" ? "＝" : "="; }
+/* 9 は「基礎」。学年では なく、学年を またいで つかう 土台の 練習。
+   QR の 学年は 1けたで、0 は すでに「不明」の 意味なので 9 を あてる。 */
+var BASICG = 9;
 var GRADENAME = {3:{ja:"小3",en:"Gr.3"},4:{ja:"小4",en:"Gr.4"},5:{ja:"小5",en:"Gr.5"},
-                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"}};
+                 6:{ja:"小6",en:"Gr.6"},7:{ja:"中1",en:"Gr.7"},9:{ja:"基礎",en:"Basics"}};
 var CATS = [
   {id:"calc", ja:"計算",   en:"Calculation"},
   {id:"fig",  ja:"図形",   en:"Geometry"},
@@ -2024,7 +2027,7 @@ function scaleSVG(m){
    ========================================================== */
 var UNITS = [
   /* 計算 */
-  {id:"int",     cat:"calc", g:[3,4,5,6,7], ja:"整数の 四則",           en:"Whole numbers",        gen:uInt,   forms:["yoko","hissan","masu"], ops:1, opts:["digits","carry","div"]},
+  {id:"int",     cat:"calc", g:[3,4,9],     ja:"整数の 四則",           en:"Whole numbers",        gen:uInt,   forms:["yoko","hissan","masu"], ops:1, opts:["digits","carry","div"]},
   {id:"mixed",   cat:"calc", g:[4,5,6,7],   ja:"四則混合（かっこ）",    en:"Order of operations",  gen:uMixed, opts:["paren"]},
   {id:"bignum",  cat:"calc", g:[3,4],       ja:"大きい 数",             en:"Large numbers",        gen:uBigNum},
   {id:"dfmix",   cat:"calc", g:[6,7],       ja:"分数と 小数の 混合計算", en:"Fractions & decimals", gen:uDfMix},
@@ -2083,7 +2086,8 @@ function unitDefaults(id,grade){
   var o = {grade:grade, ops:["+"], da:2, db:1, carry:"any", divmode:"exact",
            dp:1, fd:"diff", paren:true, negparen:true, eqform:"any"};
   if(id==="int"){
-    if(grade<=3){ o.ops=["+","-","*"]; o.da=3; o.db=2; }
+    if(grade===BASICG){ o.ops=["+","-","*","/"]; o.da=3; o.db=2; }  /* 基礎は 四則ぜんぶ */
+    else if(grade<=3){ o.ops=["+","-","*"]; o.da=3; o.db=2; }
     else if(grade===4){ o.ops=["*","/"]; o.da=3; o.db=2; o.divmode="rem"; }
     else { o.ops=["+","-","*","/"]; o.da=3; o.db=2; }
   }
@@ -2346,9 +2350,18 @@ function masuHTML(m){
 function gradeSpan(g,lang){
   var i, lg = lang || LANG, nm = function(x){ return GRADENAME[x][lg]; };
   if(!g.length) return "";
-  if(g.length===1) return nm(g[0]);
-  for(i=1;i<g.length;i++) if(g[i]!==g[i-1]+1) return g.map(nm).join(lg==="en"?", ":"・");
-  return nm(g[0])+(lg==="en"?"–":"〜")+nm(g[g.length-1]);
+  /* 基礎は 学年では ないので「小3〜基礎」と つながない。うしろに 並べる */
+  var basic = g.indexOf(BASICG)>=0;
+  var sc = g.filter(function(x){ return x!==BASICG; }), head = "";
+  if(sc.length===1) head = nm(sc[0]);
+  else if(sc.length){
+    var run = true;
+    for(i=1;i<sc.length;i++) if(sc[i]!==sc[i-1]+1) run = false;
+    head = run ? nm(sc[0])+(lg==="en"?"–":"〜")+nm(sc[sc.length-1])
+               : sc.map(nm).join(lg==="en"?", ":"・");
+  }
+  if(!basic) return head;
+  return head ? head+(lg==="en"?", ":"・")+nm(BASICG) : nm(BASICG);
 }
 function gradeLabel(){
   var g = state.grades.filter(function(x){ return GRADENAME[x]; }).sort(function(a,b){return a-b;});
@@ -2847,7 +2860,7 @@ function fillCount(exact){
   }).join("");
 }
 function fillGrades(){
-  document.getElementById("grade").innerHTML = [3,4,5,6,7].map(function(g){
+  document.getElementById("grade").innerHTML = [BASICG,3,4,5,6,7].map(function(g){
     return '<button type="button" data-v="'+g+'" aria-pressed="'
       + (state.grades.indexOf(g)>=0) + '">'+GRADENAME[g].ja+'</button>';
   }).join("");
@@ -2975,7 +2988,7 @@ function clean(){
   function pickOne(v,list,def){ return list.indexOf(v)>=0 ? v : def; }
   function num(v,lo2,hi2,def){ v = Math.floor(Number(v)); return (isFinite(v)&&v>=lo2&&v<=hi2) ? v : def; }
   st.grades = (Array.isArray(st.grades)?st.grades:[]).map(Number)
-    .filter(function(g){ return [3,4,5,6,7].indexOf(g)>=0; });
+    .filter(function(g){ return [BASICG,3,4,5,6,7].indexOf(g)>=0; });
   if(!st.grades.length) st.grades = [4];
   st.cats = (Array.isArray(st.cats)?st.cats:[]).filter(function(c){
     return CATS.some(function(x){ return x.id===c; }); });
@@ -3052,7 +3065,7 @@ function bindCheck(id,key){
 function fromURL(){
   try{
     var p = new URLSearchParams(location.search), g = Number(p.get("g")), u = p.get("u");
-    if([3,4,5,6,7].indexOf(g)>=0) state.grades = [g];
+    if([BASICG,3,4,5,6,7].indexOf(g)>=0) state.grades = [g];
     var un = u && unitOf(u);
     if(un){
       state.units = [un.id];

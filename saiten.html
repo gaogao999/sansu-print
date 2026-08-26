@@ -286,21 +286,24 @@ function pct(a,b){ return b ? Math.round(a/b*100) : 0; }
    2*seed*演算*よこの数*たての数            （100マス）              */
 var OPC = {a:"+", s:"-", m:"*", d:"/", z:""};
 var OPSIGN = {"+":"＋","-":"－","*":"×","/":"÷"};
-var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1"};
+var GN = {3:"小3", 4:"小4", 5:"小5", 6:"小6", 7:"中1", 9:"基礎"};
 function showAns(a){
   return String(a).replace(/(\d)~(\d)/g,"$1/$2")
                   .replace(/(\d)r(\d)/g,"$1 あまり $2")
                   .replace(/_/g," ");
 }
 function qrTitle(units){
-  var gs = [], ns = [], i, u, d;
+  var gn = [], ns = [], i, u, d;
   for(i=0;i<units.length;i++){
     u = units[i]; d = u.lastIndexOf(".");
     var id = d>0 ? u.slice(0,d) : u, g = d>0 ? +u.slice(d+1) : 0;
-    if(GN[g] && gs.indexOf(GN[g])<0) gs.push(GN[g]);
+    if(GN[g] && gn.indexOf(g)<0) gn.push(g);
     var nm = (U[id] && U[id].ja) || "";
     if(nm && ns.indexOf(nm)<0) ns.push(nm);
   }
+  /* 紙の だいめいと 同じ 順（小さい 学年から。基礎は 9 なので うしろ）*/
+  gn.sort(function(a,b){ return a-b; });
+  var gs = gn.map(function(g){ return GN[g]; });
   var t = (gs.length>2 ? "学年ミックス" : gs.join("・"))
         + " " + (ns.slice(0,2).join("・") + (ns.length>2 ? " ほか" : ""));
   return t.trim() || "プリント";
@@ -364,7 +367,9 @@ function decodeHash(){
     var op = v3 ? (OPC[rest.charAt(1)] || "") : (OPC[ops.length===1 ? ops : ops.charAt(i)] || "");
     var sub = v3 ? rest.slice(2) : "";
     if(!U[id]) id = "";                                   /* 知らない単元は 捨てる */
-    if(!(g>=3 && g<=7)) g = 0;
+    /* 学年の 見はりは 表を そのまま つかう（3〜7 と 9＝基礎）。
+       ここに 数を 直に 書くと、学年を 足した ときに 取りこぼす。 */
+    if(!GRN[g]) g = 0;
     if(id && U[id].c!=="calc") sub = TIDN[sub] || "";     /* 2文字の 型コードを もどす */
     else {
       if(wasAl) sub = sub.replace(/1/g,"L").replace(/2/g,"R");   /* □の位置を もどす */
@@ -600,7 +605,7 @@ function askPersist(){
    「約数」や「整数の わり算」が 崩れていれば、そちらを 先に 指す。
    ========================================================== */
 var U = {
-  int:{ja:"整数の 四則",g:[3,4,5,6,7],c:"calc"}, hole:{ja:"虫食い算",g:[3,4,5,6],c:"calc"},
+  int:{ja:"整数の 四則",g:[3,4,9],c:"calc"}, hole:{ja:"虫食い算",g:[3,4,5,6],c:"calc"},
   mixed:{ja:"四則混合（かっこ）",g:[4,5,6,7],c:"calc"}, round:{ja:"がい数",g:[4],c:"calc"},
   bignum:{ja:"大きい 数",g:[3,4],c:"calc"}, dfmix:{ja:"分数と 小数の 混合計算",g:[6,7],c:"calc"},
   daihyo:{ja:"代表値",g:[6],c:"calc"}, prime:{ja:"素因数分解",g:[7],c:"calc"},
@@ -642,7 +647,7 @@ var PRE = {
 var BASIC = ["int","dec","frac"];              /* ここが 崩れると 先が 全部 苦しい */
 var OPNAME = {"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"};
 var OPCODE = {"+":"a","-":"s","*":"m","/":"d"};
-var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+var GRN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",9:"基礎"};  /* 9＝基礎（学年では ない）*/
 
 /* 判断に つかう しきい値。少ない問題数で 言い切らない ための 決めごと。 */
 var OK   = 70,   /* これ未満＝土台が あやしい */
@@ -888,14 +893,23 @@ function levelOf(recs){
   var by = {};
   recs.forEach(function(r){ (r.perQ||[]).forEach(function(q){
     if(!GRN[q.grade]) return;
-    var x = by[q.grade] || (by[q.grade] = {n:0, ok:0, u:{}});
+    var g = q.grade;
+    /* 前に 刷った 紙には、いまは その学年に 無い 単元が 入って いる
+       ことが ある（整数の 四則を 小5〜中1から 基礎に 移した）。
+       基礎に ある 単元なら 基礎として 数える。宙に 浮かせない ため。 */
+    if(q.unit && U[q.unit] && U[q.unit].g.indexOf(g)<0 && U[q.unit].g.indexOf(9)>=0) g = 9;
+    var x = by[g] || (by[g] = {n:0, ok:0, u:{}});
     x.n++; if(q.ok) x.ok++;
     if(q.unit) x.u[q.unit] = (x.u[q.unit]||0) + 1;
   }); });
   var rows = [3,4,5,6,7].map(function(g){
     var all = unitsOfGrade(g), x = by[g];
     if(!x) return {g:g, st:"none", n:0, ok:0, r:0, tried:0, all:all.length, rest:all};
-    var tried = Object.keys(x.u).filter(function(id){ return x.u[id]>=3; });
+    /* 前に 刷った 紙には、いまは その学年に 無い 単元が 入って いる ことが
+       ある（整数の 四則を 基礎に 移した など）。その学年の 単元表に ある
+       ものだけ 数える。でないと さわった数が 単元数を こえる。 */
+    var tried = Object.keys(x.u).filter(function(id){
+      return x.u[id]>=3 && all.indexOf(id)>=0; });
     /* 「通過」と 言うには、点だけで なく その学年の 単元を ひととおり
        さわって いる ことが 要る。2単元 90%は 通過では ない。 */
     var r = rate(x), st, need = Math.max(3, Math.ceil(all.length*0.4));
@@ -911,7 +925,11 @@ function levelOf(recs){
   var now = null, i;
   for(i=0;i<rows.length;i++) if(rows[i].n>0 && rows[i].st!=="pass"){ now = rows[i].g; break; }
   if(now===null && passed.length) now = Math.min(7, passed[passed.length-1]+1);
-  return {rows:rows, passed:passed, now:now,
+  /* 基礎は 学年では ないので「通過」を つけない。できて いるか だけ 見る */
+  var bx = by[9], basic = null;
+  if(bx) basic = {n:bx.n, ok:bx.ok, r:rate(bx),
+                  st: bx.n<12 ? "thin" : rate(bx)>=HIGH ? "pass" : rate(bx)>=OK ? "near" : "work"};
+  return {rows:rows, passed:passed, now:now, basic:basic,
           row:function(g){ return rows.filter(function(z){ return z.g===g; })[0]; }};
 }
 /* 現在地を ひとことで */
@@ -931,6 +949,14 @@ function levelLine(L, total){
     else
       bits.push("いま "+GRN[now]+"の とちゅうで、"+row.all+"単元のうち "+row.tried
         +"単元を ためして "+row.r+"%");
+  }
+  /* 基礎の 紙しか つけて いない ときは、学年の 現在地が 出ない。
+     だまって「◯問」だけ 返さず、つぎに 何を すれば よいかを 言う。 */
+  if(!row && L.basic && L.basic.n>=12){
+    bits.push(L.basic.r>=HIGH
+      ? "計算の 土台は "+L.basic.r+"%で できて います"
+      : "計算の 土台は "+L.basic.r+"%です");
+    bits.push("学年の 紙を 1枚 つけると、どの学年に いるかが 出ます");
   }
   if(!bits.length) bits.push("といた 問題は "+total+"問");
   return bits.join("。") + "。";
@@ -1246,6 +1272,17 @@ function viewAna(){
         + (z.n ? '<span class="sub">'+z.n+'問 ・ '+z.tried+'/'+z.all+'単元</span>' : '')
         + '</div>';
     });
+    if(L.basic){
+      h += '<div class="lv '+L.basic.st+'">'
+        + '<span class="g">基礎</span>'
+        + '<span class="stt">'+(L.basic.st==="thin" ? "まだ 少ない"
+            : L.basic.st==="pass" ? "できて いる"
+            : L.basic.st==="near" ? "あと 少し" : "あやしい")+'</span>'
+        + '<span class="bar"><i style="width:'+L.basic.r+'%"></i></span>'
+        + '<span class="pc">'+L.basic.r+'%</span>'
+        + '<span class="sub">'+L.basic.n+'問</span>'
+        + '</div>';
+    }
     h += '</div>';
     /* まだ ためして いない ところが あると、判定は そこまで */
     var nr = nowRow && nowRow.rest ? nowRow.rest : [];
@@ -1296,7 +1333,7 @@ function viewAna(){
   }
 
   var a = analyse(recs), us = Object.keys(a.byUnit);
-  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1"};
+  var GN = {3:"小3",4:"小4",5:"小5",6:"小6",7:"中1",9:"基礎"};
   /* --- 計算の 種類ごと --- */
   var ops = Object.keys(ad.byOp).filter(function(o){ return ad.byOp[o].n>=3; });
   if(ops.length){
