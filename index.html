@@ -433,6 +433,12 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
     </label>
   </div>
 
+  <div class="grp" id="g-lefty" hidden>
+    <span class="lb">100マス</span>
+    <label class="c"><input type="checkbox" id="lefty">
+      <span>左きき用<small>たての 見出しを 右に する。書く 手で かくれない</small></span></label>
+  </div>
+
   <div class="grp" id="g-count">
     <div class="two">
       <label class="f"><span>問題の数</span><select id="count"></select></label>
@@ -2110,7 +2116,7 @@ var state = {
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true, carry:"any",
+  title:"", titleDirty:false, namerow:true, lefty:false, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -2225,7 +2231,7 @@ function makeMasu(st){
   var cols = shuffle(base.slice()), rows;
   if(op==="-"){ rows = []; for(i=10;i<20;i++) rows.push(i); shuffle(rows); }
   else rows = shuffle(base.slice());
-  return {op:op, cols:cols, rows:rows};
+  return {op:op, cols:cols, rows:rows, lefty:!!st.lefty};
 }
 
 /* ==========================================================
@@ -2328,16 +2334,22 @@ function hissanHTML(qs,cols){
   return h+'</div>';
 }
 function masuHTML(m){
-  var h = '<table class="masu"><thead><tr><th class="corner">'+OPSIGN[m.op]+'</th>', c, r;
-  for(c=0;c<10;c++) h += '<th>'+m.cols[c]+'</th>';
-  h += '</tr></thead><tbody>';
+  /* 左きき用は 表を 鏡に して、たての 見出しを 右がわに 置く。
+     左手で 書くと 手が ペンの 左を おおうので、左はしの 見出しが
+     見えなく なる。数字も こたえも 変えず、置き場所だけ 変える。 */
+  var lz = !!m.lefty, c, r;
+  var corner = '<th class="corner">'+OPSIGN[m.op]+'</th>';
+  var head = '';
+  for(c=0;c<10;c++) head += '<th>'+m.cols[c]+'</th>';
+  var h = '<table class="masu'+(lz?" lefty":"")+'"><thead><tr>'
+        + (lz ? head+corner : corner+head) + '</tr></thead><tbody>';
   for(r=0;r<10;r++){
-    h += '<tr><th>'+m.rows[r]+'</th>';
+    var side = '<th>'+m.rows[r]+'</th>', body = '';
     for(c=0;c<10;c++){
       var x = m.rows[r], y = m.cols[c];
-      h += '<td><span class="v">'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</span></td>';
+      body += '<td><span class="v">'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</span></td>';
     }
-    h += '</tr>';
+    h += '<tr>' + (lz ? body+side : side+body) + '</tr>';
   }
   return h+'</tbody></table>';
 }
@@ -2404,7 +2416,8 @@ function hint(st,qs){
     }
     if(u.id==="dec") bits.push(T(st.dp===2?"小数第2位まで":"小数第1位まで", st.dp===2?"2 decimal places":"1 decimal place"));
     if(u.id==="frac") bits.push(T(st.fd==="same"?"同じ分母":"ちがう分母", st.fd==="same"?"like denominators":"unlike denominators"));
-    if(st.type==="masu") bits.push(T("100マス","100 squares"));
+    if(st.type==="masu") bits.push(T("100マス","100 squares")
+      + (st.lefty ? T("（左きき用）"," (left-handed)") : ""));
   } else {
     var names = c.map(function(u){ return unitName(u); });
     bits.push(names.slice(0,4).join(T("・",", ")) + (names.length>4 ? T(" ほか"," and more") : ""));
@@ -2489,7 +2502,9 @@ function sheetPayload(st,qs,sheet){
 }
 /* 100マスは こたえが 表から 作れるので、見出しの 数だけ わたす */
 function masuPayload(st,m){
-  return ["2", st.seed, OPC[m.op]||"m", m.cols.join("-"), m.rows.join("-")].join("*");
+  var f = ["2", st.seed, OPC[m.op]||"m", m.cols.join("-"), m.rows.join("-")];
+  if(m.lefty) f.push("L");            /* 前に 刷った 紙は 5つ しか ない */
+  return f.join("*");
 }
 /* ---- 英数モード用の 書き方（v4）----
    QR は 大文字・数字・記号だけなら 1字 5.5ビットで 入る（ふつうの 文字は 8ビット）。
@@ -2923,6 +2938,7 @@ function syncUI(){
   document.getElementById("g-neg").hidden    = !has("neg");
   document.getElementById("g-eq").hidden     = !has("eq");
   document.getElementById("g-count").hidden  = isMasu;
+  document.getElementById("g-lefty").hidden  = !isMasu;
 
   if(has("digits") && (st.ops.indexOf("-")>=0 || st.ops.indexOf("/")>=0) && st.da < st.db){
     st.da = st.db;
@@ -2995,7 +3011,7 @@ function clean(){
   st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
   st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
   st.seed = num(st.seed,1,99999,1234);
-  ["paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
+  ["paren","negparen","namerow","lefty","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
   st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
@@ -3006,7 +3022,7 @@ function load(){
     if(!raw) return;
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
-     "count","cols","mixmode","countAuto","title","titleDirty","namerow"].forEach(function(k){
+     "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
     /* 前の 形（チェックボックスの nocarry）で 保存された ものを 引きつぐ */
@@ -3024,6 +3040,7 @@ function applyToForm(){
   document.getElementById("dp").value = state.dp;
   document.getElementById("fd").value = state.fd;
   document.getElementById("paren").checked = state.paren;
+  document.getElementById("lefty").checked = state.lefty;
   document.getElementById("negparen").checked = state.negparen;
   document.getElementById("eqform").value = state.eqform;
   document.getElementById("cols").value = state.cols;
@@ -3146,6 +3163,7 @@ document.addEventListener("DOMContentLoaded", function(){
   bindCheck("paren","paren");
   bindCheck("negparen","negparen");
   bindCheck("namerow","namerow");
+  bindCheck("lefty","lefty");
   [].forEach.call(document.querySelectorAll('input[name="dm"]'),function(r){
     r.addEventListener("change",function(){ state.divmode = this.value; update(); });
   });

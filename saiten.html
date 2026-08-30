@@ -339,7 +339,7 @@ function decodeHash(){
     var num = function(a){ return a.split("-").map(Number).filter(function(n){
       return isFinite(n) && n>=0 && n<=999; }).slice(0,20); };
     if(!num(f[3]).length || !num(f[4]).length) return null;
-    return {masu:{op:op, cols:num(f[3]), rows:num(f[4])},
+    return {masu:{op:op, cols:num(f[3]), rows:num(f[4]), lefty:f[5]==="L"},
             id:"q"+f[1], no:f[1], at:new Date().toISOString(),
             title:"100マス計算（"+OPSIGN[op]+"）", qs:[]};
   }
@@ -411,18 +411,21 @@ function mergeSheet(sh){
   return sh;
 }
 function masuTable(m){
-  var h = '<table class="masu"><thead><tr><th>'+esc(OPSIGN[m.op]||m.op)+'</th>', r, c, x, y;
-  for(c=0;c<m.cols.length;c++) h += '<th>'+esc(m.cols[c])+'</th>';
-  h += '</tr></thead><tbody>';
+  /* 左きき用の 紙は 見出しが 右がわ。こたえの 表も 同じ 向きに して、
+     紙と マスを 見くらべられる ように する。 */
+  var lz = !!m.lefty, r, c, x, y;
+  var corner = '<th>'+esc(OPSIGN[m.op]||m.op)+'</th>', head = '';
+  for(c=0;c<m.cols.length;c++) head += '<th>'+esc(m.cols[c])+'</th>';
+  var h = '<table class="masu"><thead><tr>'+(lz ? head+corner : corner+head)+'</tr></thead><tbody>';
   for(r=0;r<m.rows.length;r++){
-    h += '<tr><th>'+esc(m.rows[r])+'</th>';
+    var side = '<th>'+esc(m.rows[r])+'</th>', body = '';
     for(c=0;c<m.cols.length;c++){
-      /* 紙と 同じ 向きで 計算する（左の 数 − 上の 数）。
+      /* 紙と 同じ 向きで 計算する（たての 見出し − よこの 見出し）。
          ＋と×は 入れかえても 同じだが、−は 逆に なる。 */
       x = Number(m.rows[r]); y = Number(m.cols[c]);
-      h += '<td>'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</td>';
+      body += '<td>'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</td>';
     }
-    h += '</tr>';
+    h += '<tr>'+(lz ? body+side : side+body)+'</tr>';
   }
   return h+'</tbody></table>';
 }
