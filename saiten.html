@@ -417,6 +417,8 @@ function mergeSheet(sh){
 function masuRound(x){ return Math.round(x*100)/100; }
 function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y); }
 function mnum(n){ return n<0 ? "−"+Math.abs(n) : String(n); }
+/* D の しるしが 付いた 紙は 1 を「1.0」と 書いて いた。ごく 短い あいだ
+   だけ 出した 書き方だが、その 紙を 読んだ ときに 紙と そろう ように 残す。 */
 function masuFmt(x,dec){ return (dec && Number.isInteger(x)) ? x.toFixed(1) : mnum(x); }
 function masuTable(m){
   /* 左きき用の 紙は 見出しが 右がわ。こたえの 表も 同じ 向きに して、
