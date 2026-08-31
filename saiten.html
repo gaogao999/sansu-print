@@ -334,12 +334,15 @@ function decodeHash(){
     pay = g4.join("*");
   }
   var f = pay.split("*");
-  if(f[0]==="2" && f.length>=5){
+  /* 版5 は 区切りが 「,」。マイナスや 小数が 入る。版2 は 前に 刷った 紙 */
+  if((f[0]==="2" || f[0]==="5") && f.length>=5){
     var op = OPC[f[2]] || "*";
-    var num = function(a){ return a.split("-").map(Number).filter(function(n){
-      return isFinite(n) && n>=0 && n<=999; }).slice(0,20); };
+    var v5 = f[0]==="5";
+    var num = function(a){ return a.split(v5?",":"-").map(Number).filter(function(n){
+      return isFinite(n) && n>=-999 && n<=999; }).slice(0,20); };
     if(!num(f[3]).length || !num(f[4]).length) return null;
-    return {masu:{op:op, cols:num(f[3]), rows:num(f[4]), lefty:f[5]==="L"},
+    return {masu:{op:op, cols:num(f[3]), rows:num(f[4]),
+                  lefty:(f[5]||"").indexOf("L")>=0, dec:(f[5]||"").indexOf("D")>=0},
             id:"q"+f[1], no:f[1], at:new Date().toISOString(),
             title:"100マス計算（"+OPSIGN[op]+"）", qs:[]};
   }
@@ -410,20 +413,25 @@ function mergeSheet(sh){
   writeJSON(HIST,a);
   return sh;
 }
+/* 紙と 同じ 出しかた。0.1+0.2 の ずれを 消し、マイナスは −（長い 記号）で 出す */
+function masuRound(x){ return Math.round(x*100)/100; }
+function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y); }
+function mnum(n){ return n<0 ? "−"+Math.abs(n) : String(n); }
+function masuFmt(x,dec){ return (dec && Number.isInteger(x)) ? x.toFixed(1) : mnum(x); }
 function masuTable(m){
   /* 左きき用の 紙は 見出しが 右がわ。こたえの 表も 同じ 向きに して、
      紙と マスを 見くらべられる ように する。 */
-  var lz = !!m.lefty, r, c, x, y;
+  var lz = !!m.lefty, dec = !!m.dec, r, c, x, y;
   var corner = '<th>'+esc(OPSIGN[m.op]||m.op)+'</th>', head = '';
-  for(c=0;c<m.cols.length;c++) head += '<th>'+esc(m.cols[c])+'</th>';
+  for(c=0;c<m.cols.length;c++) head += '<th>'+esc(masuFmt(m.cols[c],dec))+'</th>';
   var h = '<table class="masu"><thead><tr>'+(lz ? head+corner : corner+head)+'</tr></thead><tbody>';
   for(r=0;r<m.rows.length;r++){
-    var side = '<th>'+esc(m.rows[r])+'</th>', body = '';
+    var side = '<th>'+esc(masuFmt(m.rows[r],dec))+'</th>', body = '';
     for(c=0;c<m.cols.length;c++){
       /* 紙と 同じ 向きで 計算する（たての 見出し − よこの 見出し）。
          ＋と×は 入れかえても 同じだが、−は 逆に なる。 */
       x = Number(m.rows[r]); y = Number(m.cols[c]);
-      body += '<td>'+(m.op==="+" ? x+y : m.op==="-" ? x-y : x*y)+'</td>';
+      body += '<td>'+masuFmt(masuAns(m.op,x,y),dec)+'</td>';
     }
     h += '<tr>'+(lz ? body+side : side+body)+'</tr>';
   }
