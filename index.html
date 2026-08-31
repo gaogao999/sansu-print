@@ -318,7 +318,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <div class="brand"><h1>算数プリントメーカー</h1><span class="sz">A4</span>
     <a class="go" id="tosaiten" href="./saiten.html" hidden>さいてん →</a></div>
 
-  <div class="grp">
+  <div class="grp" id="g-grade">
     <span class="lb">学年 <em>いくつでも えらべます</em></span>
     <div class="chips" id="grade"></div>
   </div>
@@ -328,7 +328,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
     <div class="chips" id="cat"></div>
   </div>
 
-  <div class="grp">
+  <div class="grp" id="g-unit">
     <span class="lb"><span>たんげん <em id="unitcount"></em></span>
       <button type="button" class="mini" id="mixmode" aria-pressed="false">まぜて えらぶ</button></span>
     <div class="chips units" id="unit"></div>
@@ -347,7 +347,6 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
     <div class="seg" id="type">
       <button type="button" data-v="yoko" aria-pressed="true">よこ式<small>ならべて出す</small></button>
       <button type="button" data-v="hissan" aria-pressed="false">ひっ算<small>マス目つき</small></button>
-      <button type="button" data-v="masu" aria-pressed="false">100マス<small>タイム計測</small></button>
     </div>
   </div>
 
@@ -434,7 +433,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   </div>
 
   <div class="grp" id="g-lefty" hidden>
-    <span class="lb">100マス</span>
+    <span class="lb">マスの むき</span>
     <label class="c"><input type="checkbox" id="lefty">
       <span>左きき用<small>たての 見出しを 右に する。書く 手で かくれない</small></span></label>
   </div>
@@ -2120,6 +2119,8 @@ var state = {
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
+  /* 100マスは 学年に ぶら下がらない。整数の 表だけ つかう */
+  if(state.type==="masu") return UNITS.filter(function(u){ return u.id==="int"; });
   return UNITS.filter(function(u){
     if(state.cats.indexOf(u.cat)<0) return false;
     for(var i=0;i<u.g.length;i++) if(state.grades.indexOf(u.g[i])>=0) return true;
@@ -2378,7 +2379,13 @@ function unitName(u,lang){
   }
   return u[lg];
 }
+function opNameJa(o){
+  return T({"+":"たし算","-":"ひき算","*":"かけ算","/":"わり算"}[o],
+           {"+":"Addition","-":"Subtraction","*":"Multiplication","/":"Division"}[o]);
+}
 function autoTitle(){
+  /* 100マスは 学年の 紙では ないので、学年を 頭に つけない */
+  if(state.type==="masu") return T("100マス ","100 squares ")+opNameJa(masuOp(state.ops));
   var c = chosenUnits(), head = gradeLabel()+" ";
   if(!c.length) return head+T("プリント","Worksheet");
   if(c.length===1){
@@ -2400,6 +2407,11 @@ function autoTitle(){
   return head+T("まとめ ミックス","Mixed practice");
 }
 function hint(st,qs){
+  if(st.type==="masu"){
+    var mb = [T("100マス","100 squares"), opNameJa(masuOp(st.ops))];
+    if(st.lefty) mb.push(T("左きき用","left-handed"));
+    return mb.join(T("　/　"," / "));
+  }
   var c = chosenUnits(), bits = [gradeLabel()], i;
   if(c.length===1){
     var u = c[0];
@@ -2869,10 +2881,15 @@ function fillGrades(){
   }).join("");
 }
 function fillCats(){
-  document.getElementById("cat").innerHTML = CATS.map(function(c){
+  /* 100マスは 学年にも 単元にも ぶら下がらない、それ 1枚で 完結する 紙。
+     「プリントの かたち」の 奥に 置くと たどりつけない ので、ぶんやに 出す。 */
+  var m = state.type==="masu";
+  var h = CATS.map(function(c){
     return '<button type="button" data-v="'+c.id+'" aria-pressed="'
-      + (state.cats.indexOf(c.id)>=0) + '">'+c.ja+'</button>';
+      + (!m && state.cats.indexOf(c.id)>=0) + '">'+c.ja+'</button>';
   }).join("");
+  h += '<button type="button" data-v="masu" aria-pressed="'+m+'">100マス</button>';
+  document.getElementById("cat").innerHTML = h;
 }
 function fillUnits(){
   var vis = visibleUnits(), all = vis.length>0 && vis.every(function(u){ return state.units.indexOf(u.id)>=0; });
@@ -2904,7 +2921,12 @@ function syncUI(){
     b.setAttribute("aria-pressed", b.dataset.v===st.lang ? "true":"false"); });
 
   var kind = sheetKind(), forms = allowedForms(), s = single();
-  document.getElementById("g-form").hidden = forms.length<2;
+  var masuMode = st.type==="masu";
+  if(masuMode){ st.cats = ["calc"]; st.units = ["int"]; }
+  /* 100マスは 学年も 単元も 関係ない。えらぶ ところを 出さない */
+  document.getElementById("g-grade").hidden = masuMode;
+  document.getElementById("g-unit").hidden  = masuMode;
+  document.getElementById("g-form").hidden = masuMode || forms.length<2;
   [].forEach.call(document.querySelectorAll("#type button"),function(b){
     var ok = forms.indexOf(b.dataset.v)>=0;
     b.disabled = !ok;
@@ -3015,6 +3037,8 @@ function clean(){
     st[k] = !!st[k];
   });
   st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
+  /* 100マスは 整数だけの 紙。ぶんや・たんげんと 食いちがわない ように そろえる */
+  if(st.type==="masu"){ st.cats = ["calc"]; st.units = ["int"]; }
 }
 function load(){
   try{
@@ -3116,7 +3140,14 @@ document.addEventListener("DOMContentLoaded", function(){
   });
   document.getElementById("cat").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
-    toggle(state.cats, b.dataset.v, true);
+    if(b.dataset.v==="masu"){
+      /* 100マスは それ 1枚で 完結する 紙。ほかの ぶんやとは まぜない */
+      if(state.type==="masu"){ state.type = "yoko"; }
+      else { state.type = "masu"; state.cats = ["calc"]; state.units = ["int"]; }
+    } else {
+      if(state.type==="masu"){ state.type = "yoko"; state.cats = []; }
+      toggle(state.cats, b.dataset.v, true);
+    }
     state.titleDirty = false; update();
   });
   document.getElementById("unit").addEventListener("click", function(e){
