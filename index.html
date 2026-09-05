@@ -299,13 +299,16 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   html,body{height:auto;background:#fff}
   .panel{display:none}
   .app{display:block}
-  .stage{padding:0;display:block;gap:0}
-  .wrap{height:auto;width:auto;margin:0;overflow:hidden}
+  .stage{padding:0;display:block;gap:0;width:210mm}
+  .wrap{height:auto;width:210mm;margin:0;overflow:hidden}
   /* 用紙の 高さを A4 ちょうど（297mm）に すると、ブラウザの まるめで
      1mm 未満が こぼれ、そこに 改ページが 重なって 白紙が 1ページ 生まれる。
      5mm 低くし（292mm）、その 5mm は 上下の 余白から 返すので、
      中身の 高さは 画面と 1mm も 変わらない。改ページは「次の用紙の 前」に 置く。 */
-  .paper{transform:none!important;box-shadow:none;
+  /* 印刷の 大きさ。ブラウザの 印刷ダイアログの 倍率は ページ側から
+     さわれない ので、中身の ほうを 縮める。transform では 場所取りが
+     変わらず 改ページが ずれる ので zoom を つかう。 */
+  .paper{transform:none!important;box-shadow:none;zoom:var(--ps,1);margin:0 auto;
          height:292mm;padding-top:12mm;padding-bottom:9mm;
          break-after:auto;page-break-after:auto;break-inside:auto;page-break-inside:auto}
   .stage .wrap + .wrap{break-before:page;page-break-before:always}
@@ -464,6 +467,14 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <div class="grp">
     <label class="f"><span>プリントの だいめい</span>
       <input type="text" id="title" maxlength="40"></label>
+    <label class="f"><span>印刷の 大きさ</span>
+      <select id="pscale">
+        <option value="1">100%（そのまま）</option>
+        <option value="0.9">90%</option>
+        <option value="0.8" selected>80%（1枚に おさめる）</option>
+        <option value="0.7">70%</option>
+      </select>
+    </label>
     <label class="c"><input type="checkbox" id="namerow" checked>
       <span>名前・日づけ・点数の らん</span></label>
   </div>
@@ -2124,7 +2135,7 @@ var state = {
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true, lefty:false, mkind:"int", carry:"any",
+  title:"", titleDirty:false, namerow:true, lefty:false, mkind:"int", pscale:0.8, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -2735,6 +2746,7 @@ function render(depth){
     inner = sheet==="hissan" ? hissanHTML(qs,cols)
           : sheet==="block"  ? blockHTML(qs,cols) : yokoHTML(qs,cols);
   }
+  document.documentElement.style.setProperty("--ps", st.pscale);
   stage.innerHTML = paper(st,inner,extra,sheet,qs);
   fitTitles();
   fit();
@@ -3080,6 +3092,7 @@ function clean(){
     st[k] = !!st[k];
   });
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
+  st.pscale = pickOne(String(st.pscale),["1","0.9","0.8","0.7"],"0.8");
   st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
   /* 100マスは 整数だけの 紙。ぶんや・たんげんと 食いちがわない ように そろえる */
   if(st.type==="masu"){ st.cats = ["calc"]; st.units = ["int"]; }
@@ -3091,7 +3104,7 @@ function load(){
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
      "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty",
-     "mkind"].forEach(function(k){
+     "mkind","pscale"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
     /* 前の 形（チェックボックスの nocarry）で 保存された ものを 引きつぐ */
@@ -3110,6 +3123,7 @@ function applyToForm(){
   document.getElementById("fd").value = state.fd;
   document.getElementById("paren").checked = state.paren;
   document.getElementById("lefty").checked = state.lefty;
+  document.getElementById("pscale").value = state.pscale;
   document.getElementById("negparen").checked = state.negparen;
   document.getElementById("eqform").value = state.eqform;
   document.getElementById("cols").value = state.cols;
@@ -3238,6 +3252,7 @@ document.addEventListener("DOMContentLoaded", function(){
   bindSelect("db","db",true);
   bindSelect("dp","dp",true);
   bindSelect("fd","fd",false);
+  bindSelect("pscale","pscale",false);
   bindSelect("eqform","eqform",false);
   bindSelect("carry","carry",false);
   bindCheck("paren","paren");
