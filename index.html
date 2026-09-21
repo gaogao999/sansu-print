@@ -142,39 +142,49 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 /* ---------- 用紙 ---------- */
 .stage{padding:26px 24px 60px;display:flex;flex-direction:column;align-items:center;gap:26px}
 .wrap{height:calc(297mm * var(--s));width:calc(210mm * var(--s))}
+/* プリントは 白黒だけ で 刷る。色の プリンタでも 白黒の プリンタでも
+   同じ 見た目に なり、色が にごって 数字が 読みにくく なる ことも ない。
+   こい→うすい の 順に、ここで まとめて きめる。 */
 .paper{
-  width:210mm;height:297mm;background:#fff;color:#1B3A5C;
+  --pk:#000;      /* おもな 字と 線 */
+  --pk2:#555;     /* そえる 字（小見出し・「こたえ」） */
+  --pk3:#777;     /* 番号・名まえ欄・下の ただし書き */
+  --pl:#BFBFBF;   /* うすい 区切り線・ひっ算の わく */
+  --pl2:#999;     /* 100マスの 線 */
+  --pb:#ECECEC;   /* 100マスの 見出しの 地 */
+  --pb2:#F0F0F0;  /* ひっ算の 方眼 */
+  width:210mm;height:297mm;background:#fff;color:var(--pk);
   padding:14mm 15mm 12mm;box-shadow:var(--shadow);
   transform:scale(var(--s));transform-origin:top left;
   font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
   display:flex;flex-direction:column;overflow:hidden;
 }
 .paper.en{font-family:"Zen Maru Gothic","Trebuchet MS",-apple-system,sans-serif}
-.paper .head{display:flex;align-items:flex-end;gap:5mm;border-bottom:1.4pt solid #1B3A5C;padding-bottom:2.5mm}
+.paper .head{display:flex;align-items:flex-end;gap:5mm;border-bottom:1.4pt solid var(--pk);padding-bottom:2.5mm}
 .paper .head .t{flex:1 1 auto;min-width:0;overflow:hidden}
 .paper .head .qr{flex:0 0 auto;background:#fff;padding:1.5mm;box-sizing:content-box}
 .paper .head .qr svg{display:block;width:100%;height:100%}
 .paper .head h2{margin:0;font-size:6.4mm;font-weight:700;line-height:1.25;letter-spacing:.02em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.paper .head .tag{font-size:3mm;color:#5A7391;letter-spacing:.05em;margin-top:.5mm;
+.paper .head .tag{font-size:3mm;color:var(--pk2);letter-spacing:.05em;margin-top:.5mm;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 名まえ・日づけ・点数は わき役。小さく して 題の 下に 置く */
-.paper .fields{display:flex;gap:5mm;margin-top:1.8mm;font-size:2.9mm;color:#8C9EB2}
+.paper .fields{display:flex;gap:5mm;margin-top:1.8mm;font-size:2.9mm;color:var(--pk3)}
 .paper .fields .fl{display:flex;align-items:flex-end;gap:1.2mm;min-width:0}
 .paper .fields .fl i{font-style:normal;white-space:nowrap}
-.paper .fields .fl u{display:inline-block;text-decoration:none;border-bottom:.7pt solid #7A8FA6;height:5mm}
+.paper .fields .fl u{display:inline-block;text-decoration:none;border-bottom:.7pt solid var(--pk3);height:5mm}
 .paper .fields .nm u{width:30mm}
 .paper .fields .dt u{width:18mm}
 .paper .body{flex:1 1 auto;min-height:0;padding-top:6mm}
 .paper .body.center{display:flex;align-items:center;justify-content:center}
 .paper .foot{
   flex:0 0 auto;display:flex;justify-content:space-between;align-items:baseline;gap:4mm;
-  font-size:2.8mm;color:#8C9EB2;border-top:.6pt solid #C6D3E0;padding-top:1.6mm;margin-top:3mm;
+  font-size:2.8mm;color:var(--pk3);border-top:.6pt solid var(--pl);padding-top:1.6mm;margin-top:3mm;
 }
 .paper .foot .qrnote{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* こたえは 紙には 出さない（場所だけ とっておく）。QR から 見る。 */
-.v{color:#D14338;font-weight:700}
+.v{color:var(--pk,#000);font-weight:700}
 .paper .v{visibility:hidden;-webkit-user-select:none;user-select:none}
 
 /* 分数 */
@@ -195,7 +205,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 }
 .yoko.c3 li{font-size:4.8mm}
 .yoko li::before{
-  content:"(" counter(q) ")";font-size:3.4mm;color:#7A8FA6;
+  content:"(" counter(q) ")";font-size:3.4mm;color:var(--pk3);
   flex:0 0 8mm;text-align:right;font-weight:500;
 }
 .yoko .ex{flex:0 0 auto;display:inline-flex;align-items:center;gap:1.2mm}
@@ -203,7 +213,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .yoko li.long .ex{display:block;flex:1 1 auto;min-width:0;line-height:1.5}
 .yoko li.long .sl{flex:0 0 22mm}
 .yoko .eqs{flex:0 0 auto;padding-left:3mm}
-.yoko .sl{flex:1 1 auto;border-bottom:.9pt solid #1B3A5C;min-width:13mm;
+.yoko .sl{flex:1 1 auto;border-bottom:.9pt solid var(--pk);min-width:13mm;
   height:7mm;display:flex;align-items:center;justify-content:center;padding-bottom:.5mm}
 .yoko .sl .v{font-size:4.8mm}
 
@@ -214,7 +224,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .items.c3{grid-template-columns:1fr 1fr 1fr}
 .items li{counter-increment:q;display:flex;gap:2mm;align-items:flex-start;min-width:0}
 .items li::before{
-  content:"(" counter(q) ")";font-size:3.4mm;color:#7A8FA6;
+  content:"(" counter(q) ")";font-size:3.4mm;color:var(--pk3);
   flex:0 0 8mm;text-align:right;font-weight:500;padding-top:.8mm;
 }
 .items .bd{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1.8mm}
@@ -223,28 +233,28 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .items .withfig{display:flex;gap:4mm;align-items:center}
 .items .withfig .qt{flex:1 1 auto;min-width:0}
 .items .fig{flex:0 0 auto}
-.items .fig svg{display:block;width:34mm;height:auto;color:#1B3A5C}
+.items .fig svg{display:block;width:34mm;height:auto;color:var(--pk)}
 .items.c1 .fig svg{width:42mm}
 .items .calcline{font-size:5mm;line-height:1.4;font-variant-numeric:tabular-nums;
   display:flex;align-items:center;gap:2mm;white-space:nowrap;min-width:0}
 .items .calcline.long{white-space:normal;font-size:4.2mm;line-height:1.6;display:block}
 .items .calcline .ex{display:inline-flex;align-items:center;gap:1.2mm}
-.items .aline{display:flex;align-items:flex-end;gap:2mm;font-size:3.4mm;color:#5A7391}
+.items .aline{display:flex;align-items:flex-end;gap:2mm;font-size:3.4mm;color:var(--pk2)}
 .items .aline b{font-weight:500;flex:0 0 auto}
 .items .aline u{
-  flex:1 1 auto;text-decoration:none;border-bottom:.9pt solid #1B3A5C;height:6.5mm;
+  flex:1 1 auto;text-decoration:none;border-bottom:.9pt solid var(--pk);height:6.5mm;
   display:flex;align-items:center;justify-content:center;min-width:16mm;
 }
-.items .aline u .v{font-size:4.4mm;color:#D14338}
+.items .aline u .v{font-size:4.4mm;color:var(--pk)}
 
 /* ひっ算 */
 .hissan{display:grid;gap:5mm;grid-template-columns:repeat(var(--hc,3),1fr);counter-reset:q}
 .hissan .cell{
-  counter-increment:q;border:.8pt solid #C6D3E0;border-radius:1.5mm;
+  counter-increment:q;border:.8pt solid var(--pl);border-radius:1.5mm;
   padding:2.5mm 3mm 3mm;display:flex;flex-direction:column;
   min-width:0;overflow:hidden;                 /* 列に 入りきらない ときも 紙から 出さない */
 }
-.hissan .cell::before{content:"(" counter(q) ")";font-size:3.2mm;color:#7A8FA6;line-height:1}
+.hissan .cell::before{content:"(" counter(q) ")";font-size:3.2mm;color:var(--pk3);line-height:1}
 .hissan .calc{margin:1.5mm auto 0;font-size:6mm;line-height:7mm;font-variant-numeric:tabular-nums;
   flex:1 1 auto;display:flex;flex-direction:column}
 .hissan .row{display:flex;justify-content:flex-end;align-items:center;height:7mm}
@@ -252,9 +262,9 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .hissan .d{width:7mm;text-align:center}
 .hissan .dot{width:3mm;text-align:center}
 .hissan .ansarea{
-  border-top:1.1pt solid #1B3A5C;height:7mm;flex:1 1 auto;
-  background-image:linear-gradient(#EDF3F9 .3pt,transparent .3pt),
-                   linear-gradient(90deg,#EDF3F9 .3pt,transparent .3pt);
+  border-top:1.1pt solid var(--pk);height:7mm;flex:1 1 auto;
+  background-image:linear-gradient(var(--pb2) .3pt,transparent .3pt),
+                   linear-gradient(90deg,var(--pb2) .3pt,transparent .3pt);
   background-size:7mm 7mm;background-position:7mm 0;
 }
 .hissan .ansarea.x2{height:14mm}
@@ -270,7 +280,7 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .wari .in{display:flex;align-items:stretch}
 .wari .dvs{padding:1mm 1.5mm 0 0;display:flex;align-items:flex-start}
 .wari .dvd{
-  border-top:1.1pt solid #1B3A5C;border-left:1.6pt solid #1B3A5C;
+  border-top:1.1pt solid var(--pk);border-left:1.6pt solid var(--pk);
   border-top-left-radius:6mm 3mm;padding:1mm 1.5mm 0 2.5mm;
 }
 
@@ -281,15 +291,15 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
    ますの 右と 下だけに 引き、太さは 1px を 下まわらない ように する。 */
 .masu{
   border-collapse:separate;border-spacing:0;margin:0 auto;table-layout:fixed;
-  --mb:1px;border-top:var(--mb) solid #9FB3C6;border-left:var(--mb) solid #9FB3C6;
+  --mb:1px;border-top:var(--mb) solid var(--pl2);border-left:var(--mb) solid var(--pl2);
 }
 .masu td,.masu th{
-  border:0;border-right:var(--mb) solid #9FB3C6;border-bottom:var(--mb) solid #9FB3C6;
+  border:0;border-right:var(--mb) solid var(--pl2);border-bottom:var(--mb) solid var(--pl2);
   width:16mm;height:19mm;text-align:center;
   font-size:6mm;font-weight:400;font-variant-numeric:tabular-nums;padding:0;
 }
-.masu thead th,.masu tbody th{background:#EAF0F6;font-weight:700}
-.masu .corner{background:#1B3A5C;color:#fff;font-size:7.5mm;font-weight:700}
+.masu thead th,.masu tbody th{background:var(--pb);font-weight:700}
+.masu .corner{background:var(--pk);color:#fff;font-size:7.5mm;font-weight:700}
 .masu td .v{font-size:5.5mm}
 
 /* ---------- せまい画面 ---------- */
