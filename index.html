@@ -275,9 +275,17 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 }
 
 /* 100マス */
-.masu{border-collapse:collapse;margin:0 auto;table-layout:fixed}
+/* ますの 線は うすい ので、印刷で 消えやすい。border-collapse は 線を
+   かさねる とき 1px 未満を 0 に まるめる ブラウザ（Safari）が あり、
+   そこで 線が まるごと 消える。だから 線は かさねず（separate）、
+   ますの 右と 下だけに 引き、太さは 1px を 下まわらない ように する。 */
+.masu{
+  border-collapse:separate;border-spacing:0;margin:0 auto;table-layout:fixed;
+  --mb:1px;border-top:var(--mb) solid #9FB3C6;border-left:var(--mb) solid #9FB3C6;
+}
 .masu td,.masu th{
-  border:.7pt solid #9FB3C6;width:16mm;height:19mm;text-align:center;
+  border:0;border-right:var(--mb) solid #9FB3C6;border-bottom:var(--mb) solid #9FB3C6;
+  width:16mm;height:19mm;text-align:center;
   font-size:6mm;font-weight:400;font-variant-numeric:tabular-nums;padding:0;
 }
 .masu thead th,.masu tbody th{background:#EAF0F6;font-weight:700}
@@ -310,8 +318,12 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
      変わらず 改ページが ずれる ので zoom を つかう。 */
   .paper{transform:none!important;box-shadow:none;zoom:var(--ps,1);margin:0 auto;
          height:292mm;padding-top:12mm;padding-bottom:9mm;
+         -webkit-print-color-adjust:exact;print-color-adjust:exact;
          break-after:auto;page-break-after:auto;break-inside:auto;page-break-inside:auto}
   .stage .wrap + .wrap{break-before:page;page-break-before:always}
+  /* 縮めると 線も 細く なる。その ぶん 先に 太く して、
+     刷る ときに ちょうど 1px に なる ように する。 */
+  .masu{--mb:calc(1px / var(--ps,1))}
 }
 </style>
 </head>
