@@ -341,10 +341,12 @@ function decodeHash(){
     var num = function(a){ return a.split(v5?",":"-").map(Number).filter(function(n){
       return isFinite(n) && n>=-999 && n<=999; }).slice(0,20); };
     if(!num(f[3]).length || !num(f[4]).length) return null;
-    return {masu:{op:op, cols:num(f[3]), rows:num(f[4]),
+    /* ますの 数は 表の 大きさ から わかる（100マス・81マス など） */
+    var mc = num(f[3]), mr = num(f[4]);
+    return {masu:{op:op, cols:mc, rows:mr,
                   lefty:(f[5]||"").indexOf("L")>=0, dec:(f[5]||"").indexOf("D")>=0},
             id:"q"+f[1], no:f[1], at:new Date().toISOString(),
-            title:"100マス計算（"+OPSIGN[op]+"）", qs:[]};
+            title:(mc.length*mr.length)+"マス計算（"+OPSIGN[op]+"）", qs:[]};
   }
   /* v3: 3*No.*型のならび*問ごとの番号*こたえ*むずかしさ
      v1: 1*No.*単元*問ごとの番号*演算*こたえ（前に 刷った プリント）  */
@@ -452,9 +454,10 @@ function viewMark(){
        + '<p class="muted">'+esc(qrNote)+'</p></div>';
   }
   if(qrMasu){
-    return h + '<div class="card"><h2>100マス計算の こたえ</h2>'
+    var mn = qrMasu.cols.length * qrMasu.rows.length;
+    return h + '<div class="card"><h2>'+mn+'マス計算の こたえ</h2>'
       + '<div class="masuwrap">'+masuTable(qrMasu)+'</div>'
-      + '<p class="muted">100マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
+      + '<p class="muted">'+mn+'マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
   }
   if(!list.length){
     return '<div class="card"><div class="empty">'
@@ -765,7 +768,7 @@ function profJa(p){
   if(!p) return "";
   var m = /^([a-z])(\d)(\d)([rnot]*)$/.exec(String(p));
   if(!m) return "";
-  var bits = [], t = {y:"よこ式", h:"ひっ算", b:"", m:"100マス"}[m[1]];
+  var bits = [], t = {y:"よこ式", h:"ひっ算", b:"", m:"マス計算"}[m[1]];
   if(t) bits.push(t);
   if(+m[2] && +m[3]) bits.push(m[2]+"けたと "+m[3]+"けた");
   if(m[4].indexOf("r")>=0) bits.push("あまりあり");
