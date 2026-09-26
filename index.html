@@ -460,9 +460,17 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <div class="grp" id="g-mkind" hidden>
     <span class="lb">表の 数</span>
     <div class="seg" id="mkind">
-      <button type="button" data-v="int" aria-pressed="true">整数<small>1〜10</small></button>
-      <button type="button" data-v="dec" aria-pressed="false">小数<small>0.1〜9</small></button>
-      <button type="button" data-v="neg" aria-pressed="false">正負の数<small>−9〜9</small></button>
+      <button type="button" data-v="int" aria-pressed="true">整数<small id="mk-int">1〜10</small></button>
+      <button type="button" data-v="dec" aria-pressed="false">小数<small id="mk-dec">0.1〜9</small></button>
+      <button type="button" data-v="neg" aria-pressed="false">正負の数<small id="mk-neg">−9〜9</small></button>
+    </div>
+  </div>
+
+  <div class="grp" id="g-mzero" hidden>
+    <span class="lb">0 を 入れるか</span>
+    <div class="seg g2" id="mzero">
+      <button type="button" data-v="off" aria-pressed="true">0 なし<small>ぜんぶ 考える ます</small></button>
+      <button type="button" data-v="on" aria-pressed="false">0 あり<small>19ますは 書きうつし</small></button>
     </div>
   </div>
 
@@ -2157,7 +2165,7 @@ var state = {
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true, lefty:false, mkind:"int", pscale:0.8, carry:"any",
+  title:"", titleDirty:false, namerow:true, lefty:false, mkind:"int", mzero:false, pscale:0.8, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -2262,25 +2270,29 @@ function masuOp(ops){
   for(i=0;i<(ops||[]).length;i++) if(MASUOPS.indexOf(ops[i])>=0) return ops[i];
   return "+";
 }
-/* 100マスの 数の しゅるい。どれも 0 は 入れない。
-   0 を たす・ひく・かける のは 考える ところが なく、100マスの うち
-   19ます（よこ1れつ＋たて1れつ）が ただの 書きうつしに なって しまう。
-   int … 1〜10。ひき算は 上を 11〜20 に して こたえを マイナスに しない
-   dec … 0.1〜9（1〜9 は 整数）。ひき算は 上を 9 ずらす
-   neg … −9〜9 から 0 を のぞいた 18こ のうち 10こ。こたえは マイナスに なりうる  */
+/* 100マスの 数の しゅるい。
+   int … 整数。0なし=1〜10 / 0あり=0〜9。ひき算は 上を 10 ずらして
+          こたえを マイナスに しない（0なし=11〜20 / 0あり=10〜19）
+   dec … 小数。0.1〜0.9 と 整数を まぜる。ひき算は 上を 9 ずらす
+   neg … 正負の数。−9〜9 から 10こ
+   「0 を 入れるか」は 3つとも に かかる。0 が 一つ 入ると、その よこ 1れつと
+   たて 1れつ、あわせて 19ます が ただの 書きうつしに なる（100ますの 2割ちかく）。
+   それでも 0 の たし算・かけ算を わざと 出したい ことは ある ので えらべる。
+   整数で 0 を 抜くと 1〜9 の 9とおり しか 残らず 10ます 埋まらない ので、
+   0なし の ときだけ 上を 10 まで のばす。 */
 function masuRound(x){ return Math.round(x*100)/100; }        /* 0.1+0.2 の ずれを 消す */
 function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y); }
 function masuKind(st){ return ({dec:"dec",neg:"neg"})[st.mkind] || "int"; }
 function makeMasu(st){
   var rand = mulberry((st.seed*40503+7) % 4294967296);
-  var op = masuOp(st.ops), kind = masuKind(st), i;
+  var op = masuOp(st.ops), kind = masuKind(st), z = !!st.mzero, i;
   function shuffle(a){
     for(var i2=a.length-1;i2>0;i2--){ var j=Math.floor(rand()*(i2+1)); var t=a[i2];a[i2]=a[j];a[j]=t; }
     return a;
   }
-  function pick10(lo,hi){                          /* lo〜hi から 0 を のぞいて 10こ */
+  function pick10(lo,hi){                   /* lo〜hi から 10こ。0なし の ときは 0 をとばす */
     var pool = [], k;
-    for(k=lo;k<=hi;k++) if(k!==0) pool.push(k);
+    for(k=lo;k<=hi;k++) if(z || k!==0) pool.push(k);
     return shuffle(pool).slice(0,10);
   }
   var cols, rows;
@@ -2290,7 +2302,8 @@ function makeMasu(st){
        ように する（整数の 100マスで 10〜19 に する のと 同じ かんがえ）。 */
     var mix = function(sh){
       var d = [], n = [], k;
-      for(k=1;k<=9;k++){ d.push(masuRound(k/10 + sh)); n.push(k + sh); }
+      for(k=1;k<=9;k++) d.push(masuRound(k/10 + sh));   /* 小数は 0.1 から。0 は 整数がわ */
+      for(k=(z?0:1);k<=9;k++) n.push(k + sh);
       return shuffle(shuffle(d).slice(0,5).concat(shuffle(n).slice(0,5)));
     };
     cols = mix(0);
@@ -2299,8 +2312,9 @@ function makeMasu(st){
     cols = pick10(-9,9);
     rows = pick10(-9,9);
   } else {
-    cols = pick10(1,10);
-    rows = op==="-" ? pick10(11,20) : pick10(1,10);
+    cols = z ? pick10(0,9) : pick10(1,10);
+    rows = op==="-" ? (z ? pick10(10,19) : pick10(11,20))
+                    : (z ? pick10(0,9)   : pick10(1,10));
   }
   return {op:op, cols:cols, rows:rows, lefty:!!st.lefty, kind:kind};
 }
@@ -3038,8 +3052,15 @@ function syncUI(){
   document.getElementById("g-count").hidden  = isMasu;
   document.getElementById("g-lefty").hidden  = !isMasu;
   document.getElementById("g-mkind").hidden  = !isMasu;
+  document.getElementById("g-mzero").hidden  = !isMasu;
   [].forEach.call(document.querySelectorAll("#mkind button"),function(b){
     b.setAttribute("aria-pressed", b.dataset.v===st.mkind ? "true":"false"); });
+  [].forEach.call(document.querySelectorAll("#mzero button"),function(b){
+    b.setAttribute("aria-pressed", (b.dataset.v==="on")===!!st.mzero ? "true":"false"); });
+  /* えらんだ ものに 合わせて、表の 数の 目やすを 書きかえる */
+  document.getElementById("mk-int").textContent = st.mzero ? "0〜9"  : "1〜10";
+  document.getElementById("mk-dec").textContent = st.mzero ? "0〜9"  : "0.1〜9";
+  document.getElementById("mk-neg").textContent = "−9〜9";
 
   if(has("digits") && (st.ops.indexOf("-")>=0 || st.ops.indexOf("/")>=0) && st.da < st.db){
     st.da = st.db;
@@ -3112,7 +3133,7 @@ function clean(){
   st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
   st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
   st.seed = num(st.seed,1,99999,1234);
-  ["paren","negparen","namerow","lefty","titleDirty","mixmode","countAuto"].forEach(function(k){
+  ["paren","negparen","namerow","lefty","mzero","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
@@ -3128,7 +3149,7 @@ function load(){
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
      "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty",
-     "mkind","pscale"].forEach(function(k){
+     "mkind","mzero","pscale"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
     /* 前の 形（チェックボックスの nocarry）で 保存された ものを 引きつぐ */
@@ -3224,6 +3245,10 @@ document.addEventListener("DOMContentLoaded", function(){
   document.getElementById("mkind").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b || b.disabled) return;
     state.mkind = b.dataset.v; state.titleDirty = false; update();
+  });
+  document.getElementById("mzero").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b || b.disabled) return;
+    state.mzero = (b.dataset.v==="on"); state.titleDirty = false; update();
   });
   document.getElementById("cat").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
