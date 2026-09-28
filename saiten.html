@@ -417,7 +417,15 @@ function mergeSheet(sh){
 }
 /* 紙と 同じ 出しかた。0.1+0.2 の ずれを 消し、マイナスは −（長い 記号）で 出す */
 function masuRound(x){ return Math.round(x*100)/100; }
-function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y); }
+function masuAns(op,x,y){
+  if(op==="/") return Math.floor(x/y);                        /* 商。あまりは 下で */
+  return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y);
+}
+/* わり算は「7…3」（7 あまり 3）。わりきれる ときは 商だけ。紙と 同じ 書き方 */
+function masuDivText(x,y){
+  var q = Math.floor(x/y), r = x - q*y;
+  return q + (r ? "…"+r : "");
+}
 function mnum(n){ return n<0 ? "−"+Math.abs(n) : String(n); }
 /* D の しるしが 付いた 紙は 1 を「1.0」と 書いて いた。ごく 短い あいだ
    だけ 出した 書き方だが、その 紙を 読んだ ときに 紙と そろう ように 残す。 */
@@ -435,7 +443,7 @@ function masuTable(m){
       /* 紙と 同じ 向きで 計算する（たての 見出し − よこの 見出し）。
          ＋と×は 入れかえても 同じだが、−は 逆に なる。 */
       x = Number(m.rows[r]); y = Number(m.cols[c]);
-      body += '<td>'+masuFmt(masuAns(m.op,x,y),dec)+'</td>';
+      body += '<td>'+(m.op==="/" ? masuDivText(x,y) : masuFmt(masuAns(m.op,x,y),dec))+'</td>';
     }
     h += '<tr>'+(lz ? body+side : side+body)+'</tr>';
   }
@@ -456,6 +464,7 @@ function viewMark(){
   if(qrMasu){
     var mn = qrMasu.cols.length * qrMasu.rows.length;
     return h + '<div class="card"><h2>'+mn+'マス計算の こたえ</h2>'
+      + (qrMasu.op==="/" ? '<p class="muted">たて ÷ よこ。「7…3」は 7 あまり 3。</p>' : '')
       + '<div class="masuwrap">'+masuTable(qrMasu)+'</div>'
       + '<p class="muted">'+mn+'マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
   }

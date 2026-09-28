@@ -2266,11 +2266,15 @@ function makeSet(st){
   }
   return out;
 }
-/* 100マスに できるのは たし算・ひき算・かけ算だけ。
-   わり算は マスが きれいに 割りきれないので 作れない。
-   えらばれて いる 演算が わり算の ときは たし算に もどす
-   （題も 見出しも ここから 出すので、表と 食いちがわない）。 */
-var MASUOPS = ["+","-","*"];
+/* 100マスで できる 計算。題も 見出しも ここから 出すので、表と 食いちがわない。
+   わり算は 向きを「たて ÷ よこ」に きめて いる（ひき算の「たて − よこ」と 同じ）。
+   よこ（わる数）は 1〜N、たて（わられる数）は 10〜89。
+   どの たても どの よこでも わりきれる ように する ことは できない
+   （1〜9 ぜんぶで わりきれる 2けたの 数は ない）ので、あまりの ある
+   わり算に する。89 まで に して おくと、いちばん むずかしい ÷9 の れつは
+   こたえが 9 あまり 8 まで に おさまる（九九の はんい）。
+   小数と 正負の数の わり算は あまりの 意味が かわるので 整数だけ。 */
+var MASUOPS = ["+","-","*","/"];
 function masuOp(ops){
   var i;
   for(i=0;i<(ops||[]).length;i++) if(MASUOPS.indexOf(ops[i])>=0) return ops[i];
@@ -2302,8 +2306,21 @@ function masuLabel(st){
   return T(n+"マス", n+" squares");
 }
 function masuRound(x){ return Math.round(x*100)/100; }        /* 0.1+0.2 の ずれを 消す */
-function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y); }
-function masuKind(st){ return ({dec:"dec",neg:"neg"})[st.mkind] || "int"; }
+function masuAns(op,x,y){
+  if(op==="/") return Math.floor(x/y);                        /* 商。あまりは masuRem */
+  return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y);
+}
+function masuRem(x,y){ return x - Math.floor(x/y)*y; }
+/* こたえの 書き方。わり算は「7…3」（7 あまり 3）。わりきれる ときは 商だけ */
+function masuAnsText(op,x,y){
+  if(op!=="/") return mnum(masuAns(op,x,y));
+  var r = masuRem(x,y);
+  return masuAns(op,x,y) + (r ? "…"+r : "");
+}
+function masuKind(st){
+  if(masuOp(st.ops)==="/") return "int";                      /* わり算は 整数だけ */
+  return ({dec:"dec",neg:"neg"})[st.mkind] || "int";
+}
 function makeMasu(st){
   var rand = mulberry((st.seed*40503+7) % 4294967296);
   var op = masuOp(st.ops), kind = masuKind(st), N = masuSize(st), i;
@@ -2339,9 +2356,14 @@ function makeMasu(st){
     /* ひき算は たてを ずらして こたえを マイナスに しない。ずらす はばは
        よこの いちばん 大きい 数（0あり=9 なら 10、0なし=N なら N）。 */
     var sh = z ? 10 : N;
-    cols = z ? pickN(0,9) : pickN(1,N);
-    rows = op==="-" ? (z ? pickN(10,19) : pickN(1+sh,N+sh))
-                    : (z ? pickN(0,9)   : pickN(1,N));
+    if(op==="/"){
+      cols = pickN(1,N);                                      /* わる数 1〜N（0 では われない） */
+      rows = pickN(10,89);                                    /* わられる数 */
+    } else {
+      cols = z ? pickN(0,9) : pickN(1,N);
+      rows = op==="-" ? (z ? pickN(10,19) : pickN(1+sh,N+sh))
+                      : (z ? pickN(0,9)   : pickN(1,N));
+    }
   }
   return {op:op, cols:cols, rows:rows, lefty:masuSides(st)[0]==="l", kind:kind};
 }
@@ -2460,7 +2482,7 @@ function masuHTML(m){
     var side = '<th>'+mnum(m.rows[r])+'</th>', body = '';
     for(c=0;c<nc;c++){
       var x = m.rows[r], y = m.cols[c];
-      body += '<td><span class="v">'+mnum(masuAns(m.op,x,y))+'</span></td>';
+      body += '<td><span class="v">'+masuAnsText(m.op,x,y)+'</span></td>';
     }
     h += '<tr>' + (lz ? body+side : side+body) + '</tr>';
   }
@@ -2520,7 +2542,11 @@ function autoTitle(){
 }
 function hint(st,qs){
   if(st.type==="masu"){
-    var mb = [masuLabel(st), opNameJa(masuOp(st.ops))];
+    var mop = masuOp(st.ops);
+    var mb = [masuLabel(st), opNameJa(mop)];
+    /* 向きの ある 計算は、どちらから どちらを ひく／わるかを 紙に 書く */
+    if(mop==="-") mb.push(T("たて − よこ","row − column"));
+    if(mop==="/") mb.push(T("たて ÷ よこ","row ÷ column"), T("あまりは 7…3 と 書く","remainder: 7…3"));
     /* 「両方」の ときは 1まいずつ むきが ちがう ので、その 紙の 表を 見る */
     var lz = qs && qs.masu ? !!qs.masu.lefty : masuSides(st)[0]==="l";
     if(st.mkind==="dec") mb.push(T("小数","decimals"));
@@ -3064,7 +3090,7 @@ function syncUI(){
   if(isMasu) st.ops = [masuOp(st.ops)];
   document.getElementById("g-ops").hidden = ops.length===0;
   [].forEach.call(document.querySelectorAll("#ops button"),function(b){
-    var ok = ops.indexOf(b.dataset.v)>=0 && !(isMasu && b.dataset.v==="/");
+    var ok = ops.indexOf(b.dataset.v)>=0;
     b.disabled = !ok;
     b.setAttribute("aria-pressed", st.ops.indexOf(b.dataset.v)>=0 ? "true":"false");
   });
@@ -3093,10 +3119,15 @@ function syncUI(){
   document.getElementById("g-msize").hidden  = !isMasu;
   [].forEach.call(document.querySelectorAll("#msize button"),function(b){
     b.setAttribute("aria-pressed", Number(b.dataset.v)===masuSize(st) ? "true":"false"); });
+  /* わり算は 整数だけ。小数・正負の数は おせない ように する */
+  var mdiv = isMasu && masuOp(st.ops)==="/";
+  if(mdiv) st.mkind = "int";
   [].forEach.call(document.querySelectorAll("#mkind button"),function(b){
+    b.disabled = mdiv && b.dataset.v!=="int";
     b.setAttribute("aria-pressed", b.dataset.v===st.mkind ? "true":"false"); });
   /* えらんだ ものに 合わせて、表の 数の 目やすを 書きかえる */
-  document.getElementById("mk-int").textContent = masuSize(st)===9 ? "1〜9" : "0〜9";
+  document.getElementById("mk-int").textContent = mdiv ? "10〜89 ÷ 1〜"+masuSize(st)
+    : masuSize(st)===9 ? "1〜9" : "0〜9";
   document.getElementById("mk-dec").textContent = "0.1〜9";
   document.getElementById("mk-neg").textContent = "−9〜9";
 
