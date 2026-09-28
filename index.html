@@ -463,8 +463,8 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   <div class="grp" id="g-msize" hidden>
     <span class="lb">ますの 数</span>
     <div class="seg g2" id="msize">
-      <button type="button" data-v="10" aria-pressed="true">100マス<small>10 × 10</small></button>
-      <button type="button" data-v="9" aria-pressed="false">81マス<small>9 × 9</small></button>
+      <button type="button" data-v="10" aria-pressed="true">100マス<small>10 × 10 ・ 0から</small></button>
+      <button type="button" data-v="9" aria-pressed="false">81マス<small>9 × 9 ・ 九九</small></button>
     </div>
   </div>
 
@@ -474,14 +474,6 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
       <button type="button" data-v="int" aria-pressed="true">整数<small id="mk-int">1〜10</small></button>
       <button type="button" data-v="dec" aria-pressed="false">小数<small id="mk-dec">0.1〜9</small></button>
       <button type="button" data-v="neg" aria-pressed="false">正負の数<small id="mk-neg">−9〜9</small></button>
-    </div>
-  </div>
-
-  <div class="grp" id="g-mzero" hidden>
-    <span class="lb">0 を 入れるか</span>
-    <div class="seg g2" id="mzero">
-      <button type="button" data-v="off" aria-pressed="true">0 なし<small>ぜんぶ 考える ます</small></button>
-      <button type="button" data-v="on" aria-pressed="false">0 あり<small id="mz-on">最大 19ます 書きうつし</small></button>
     </div>
   </div>
 
@@ -2179,7 +2171,7 @@ var state = {
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true, mside:"r", mkind:"int", mzero:false, msize:10, pscale:0.8, carry:"any",
+  title:"", titleDirty:false, namerow:true, mside:"r", mkind:"int", msize:10, pscale:0.8, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -2289,12 +2281,14 @@ function masuOp(ops){
           こたえを マイナスに しない（0なし=11〜20 / 0あり=10〜19）
    dec … 小数。0.1〜0.9 と 整数を まぜる。ひき算は 上を 9 ずらす
    neg … 正負の数。−9〜9 から 10こ
-   「0 を 入れるか」は 3つとも に かかる。0 が 一つ 入ると、その よこ 1れつと
-   たて 1れつ、あわせて 19ます が ただの 書きうつしに なる（100ますの 2割ちかく）。
-   それでも 0 の たし算・かけ算を わざと 出したい ことは ある ので えらべる。
-   整数で 0 を 抜くと 1〜9 の 9とおり しか 残らない。81マス（9×9）なら
-   ちょうど 足りるが、100マス（10×10）では 1こ 足りない ので、
-   100マスの 0なし の ときだけ 上を 10 まで のばす。 */
+   0 を 入れるかは えらばせない。ますの 数で きまる。
+   0 を たす・ひく・かける のは 考える ところが ない ので、入れるのは
+   それが ないと ますが 埋まらない とき だけ に する。
+   1けたの 整数は 1〜9 の 9とおり しか ない ので、10×10 の 100マスでは
+   0 を 足して 0〜9 に する（よくある 100マス計算の 形）。
+   9×9 の 81マスは 1〜9 で ちょうど 足りるので 0 は 入れない（九九）。
+   小数（0.1〜0.9 と 1〜9）と 正負の数（−9〜9）は もとが 多い ので、
+   どちらの 大きさでも 0 は 入れない。 */
 function masuSize(st){ return Number(st && st.msize)===9 ? 9 : 10; }
 /* マスの むき。「両方」なら 同じ 数の 表を 右きき用・左きき用 の
    2まい 出す。数も こたえも 同じで、見出しの 置き場所だけ ちがう。
@@ -2312,7 +2306,9 @@ function masuAns(op,x,y){ return masuRound(op==="+" ? x+y : op==="-" ? x-y : x*y
 function masuKind(st){ return ({dec:"dec",neg:"neg"})[st.mkind] || "int"; }
 function makeMasu(st){
   var rand = mulberry((st.seed*40503+7) % 4294967296);
-  var op = masuOp(st.ops), kind = masuKind(st), z = !!st.mzero, N = masuSize(st), i;
+  var op = masuOp(st.ops), kind = masuKind(st), N = masuSize(st), i;
+  /* 0 が 要るのは 整数の 100マスだけ（1けたの 整数が 9とおり しか ない ため） */
+  var z = (kind==="int" && N===10);
   function shuffle(a){
     for(var i2=a.length-1;i2>0;i2--){ var j=Math.floor(rand()*(i2+1)); var t=a[i2];a[i2]=a[j];a[j]=t; }
     return a;
@@ -3094,20 +3090,15 @@ function syncUI(){
   [].forEach.call(document.querySelectorAll("#mside button"),function(b){
     b.setAttribute("aria-pressed", b.dataset.v===st.mside ? "true":"false"); });
   document.getElementById("g-mkind").hidden  = !isMasu;
-  document.getElementById("g-mzero").hidden  = !isMasu;
   document.getElementById("g-msize").hidden  = !isMasu;
   [].forEach.call(document.querySelectorAll("#msize button"),function(b){
     b.setAttribute("aria-pressed", Number(b.dataset.v)===masuSize(st) ? "true":"false"); });
   [].forEach.call(document.querySelectorAll("#mkind button"),function(b){
     b.setAttribute("aria-pressed", b.dataset.v===st.mkind ? "true":"false"); });
-  [].forEach.call(document.querySelectorAll("#mzero button"),function(b){
-    b.setAttribute("aria-pressed", (b.dataset.v==="on")===!!st.mzero ? "true":"false"); });
   /* えらんだ ものに 合わせて、表の 数の 目やすを 書きかえる */
-  document.getElementById("mk-int").textContent =
-    st.mzero ? "0〜9" : (masuSize(st)===9 ? "1〜9" : "1〜10");
-  document.getElementById("mk-dec").textContent = st.mzero ? "0〜9"  : "0.1〜9";
+  document.getElementById("mk-int").textContent = masuSize(st)===9 ? "1〜9" : "0〜9";
+  document.getElementById("mk-dec").textContent = "0.1〜9";
   document.getElementById("mk-neg").textContent = "−9〜9";
-  document.getElementById("mz-on").textContent = "最大 "+(masuSize(st)*2-1)+"ます 書きうつし";
 
   if(has("digits") && (st.ops.indexOf("-")>=0 || st.ops.indexOf("/")>=0) && st.da < st.db){
     st.da = st.db;
@@ -3180,11 +3171,12 @@ function clean(){
   st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
   st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
   st.seed = num(st.seed,1,99999,1234);
-  ["paren","negparen","namerow","mzero","titleDirty","mixmode","countAuto"].forEach(function(k){
+  ["paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
   st.msize = Number(st.msize)===9 ? 9 : 10;
+  delete st.mzero;                       /* 前の 形（0あり・0なしの えらび） */
   st.mside = pickOne(st.mside,["r","l","both"],"r");
   delete st.lefty;
   st.pscale = pickOne(String(st.pscale),["1","0.9","0.8","0.7"],"0.8");
@@ -3199,7 +3191,7 @@ function load(){
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
      "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty","mside",
-     "mkind","mzero","msize","pscale"].forEach(function(k){
+     "mkind","msize","pscale"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
     /* 前の 形で 保存された ものを 引きつぐ。
@@ -3304,10 +3296,6 @@ document.addEventListener("DOMContentLoaded", function(){
   document.getElementById("msize").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b || b.disabled) return;
     state.msize = Number(b.dataset.v); state.titleDirty = false; update();
-  });
-  document.getElementById("mzero").addEventListener("click", function(e){
-    var b = e.target.closest("button"); if(!b || b.disabled) return;
-    state.mzero = (b.dataset.v==="on"); state.titleDirty = false; update();
   });
   document.getElementById("cat").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
