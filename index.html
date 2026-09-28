@@ -486,9 +486,12 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
   </div>
 
   <div class="grp" id="g-lefty" hidden>
-    <span class="lb">マスの むき</span>
-    <label class="c"><input type="checkbox" id="lefty">
-      <span>左きき用<small>たての 見出しを 右に する。書く 手で かくれない</small></span></label>
+    <span class="lb">マスの むき <em>たての 見出しを どちらに 置くか</em></span>
+    <div class="seg" id="mside">
+      <button type="button" data-v="r" aria-pressed="true">右きき用<small>見出しは 左</small></button>
+      <button type="button" data-v="l" aria-pressed="false">左きき用<small>見出しは 右</small></button>
+      <button type="button" data-v="both" aria-pressed="false">両方<small>2まい 出る</small></button>
+    </div>
   </div>
 
   <div class="grp" id="g-count">
@@ -2176,7 +2179,7 @@ var state = {
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
   count:12, cols:"auto", mixmode:false, countAuto:true,
-  title:"", titleDirty:false, namerow:true, lefty:false, mkind:"int", mzero:false, msize:10, pscale:0.8, carry:"any",
+  title:"", titleDirty:false, namerow:true, mside:"r", mkind:"int", mzero:false, msize:10, pscale:0.8, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
 function visibleUnits(){
@@ -2293,6 +2296,13 @@ function masuOp(ops){
    ちょうど 足りるが、100マス（10×10）では 1こ 足りない ので、
    100マスの 0なし の ときだけ 上を 10 まで のばす。 */
 function masuSize(st){ return Number(st && st.msize)===9 ? 9 : 10; }
+/* マスの むき。「両方」なら 同じ 数の 表を 右きき用・左きき用 の
+   2まい 出す。数も こたえも 同じで、見出しの 置き場所だけ ちがう。
+   QR は 1まいずつ 別に つくる（読んだ 先の 表も 同じ むきに なる）。 */
+function masuSides(st){
+  var v = st && st.mside;
+  return v==="both" ? ["r","l"] : (v==="l" ? ["l"] : ["r"]);
+}
 function masuLabel(st){
   var n = masuSize(st)*masuSize(st);
   return T(n+"マス", n+" squares");
@@ -2337,7 +2347,7 @@ function makeMasu(st){
     rows = op==="-" ? (z ? pickN(10,19) : pickN(1+sh,N+sh))
                     : (z ? pickN(0,9)   : pickN(1,N));
   }
-  return {op:op, cols:cols, rows:rows, lefty:!!st.lefty, kind:kind};
+  return {op:op, cols:cols, rows:rows, lefty:masuSides(st)[0]==="l", kind:kind};
 }
 
 /* ==========================================================
@@ -2515,9 +2525,11 @@ function autoTitle(){
 function hint(st,qs){
   if(st.type==="masu"){
     var mb = [masuLabel(st), opNameJa(masuOp(st.ops))];
+    /* 「両方」の ときは 1まいずつ むきが ちがう ので、その 紙の 表を 見る */
+    var lz = qs && qs.masu ? !!qs.masu.lefty : masuSides(st)[0]==="l";
     if(st.mkind==="dec") mb.push(T("小数","decimals"));
     if(st.mkind==="neg") mb.push(T("正負の数","positive & negative"));
-    if(st.lefty) mb.push(T("左きき用","left-handed"));
+    if(lz) mb.push(T("左きき用","left-handed"));
     return mb.join(T("　/　"," / "));
   }
   var c = chosenUnits(), bits = [gradeLabel()], i;
@@ -2537,7 +2549,7 @@ function hint(st,qs){
     if(u.id==="dec") bits.push(T(st.dp===2?"小数第2位まで":"小数第1位まで", st.dp===2?"2 decimal places":"1 decimal place"));
     if(u.id==="frac") bits.push(T(st.fd==="same"?"同じ分母":"ちがう分母", st.fd==="same"?"like denominators":"unlike denominators"));
     if(st.type==="masu") bits.push(masuLabel(st)
-      + (st.lefty ? T("（左きき用）"," (left-handed)") : ""));
+      + (masuSides(st)[0]==="l" ? T("（左きき用）"," (left-handed)") : ""));
   } else {
     var names = c.map(function(u){ return unitName(u); });
     bits.push(names.slice(0,4).join(T("・",", ")) + (names.length>4 ? T(" ほか"," and more") : ""));
@@ -2733,7 +2745,7 @@ function paper(st,inner,extraField,sheet,qs){
      名まえ・日づけ・点数は 小さくして 題の 下に たたむ。 */
   return '<div class="wrap"><div class="paper'+(LANG==="en"?" en":"")+'">'
     + '<div class="head"><div class="t"><h2>'+esc(st.title||autoTitle())+'</h2>'
-    + '<div class="tag">'+esc(hint(st))+'</div>'
+    + '<div class="tag">'+esc(hint(st,qs))+'</div>'
     + fields + '</div>'
     + qrsvg + '</div>'
     + '<div class="'+bodyCls+'">'+inner+'</div>'
@@ -2786,12 +2798,18 @@ function render(depth){
     w.hidden = false;
     return;
   }
-  var sheet = sheetKind(), inner, extra = null, cols = 1, short = false, qs = [];
+  var sheet = sheetKind(), inner, extra = null, cols = 1, short = false, qs = [], papers = null;
   if(sheet==="masu"){
-    var m = makeMasu(st);
-    inner = masuHTML(m);
+    var m = makeMasu(st), sides = masuSides(st), mm, si;
     extra = T("タイム","Time");
-    qs = {masu:m};                                 /* 100マスは 表ごと こたえを わたす */
+    /* 数は 1回だけ つくって、むきの ぶんだけ 紙に する。
+       「両方」でも 中身は 同じ なので、右きき用と 左きき用を
+       見くらべながら 同じ 問題で 競える。 */
+    papers = "";
+    for(si=0; si<sides.length; si++){
+      mm = {op:m.op, cols:m.cols, rows:m.rows, kind:m.kind, lefty:sides[si]==="l"};
+      papers += paper(st, masuHTML(mm), extra, "masu", {masu:mm});
+    }
     lastQs = null;                                 /* 1問ずつの 採点は しない */
   } else {
     qs = makeSet(st);
@@ -2807,7 +2825,7 @@ function render(depth){
           : sheet==="block"  ? blockHTML(qs,cols) : yokoHTML(qs,cols);
   }
   document.documentElement.style.setProperty("--ps", st.pscale);
-  stage.innerHTML = paper(st,inner,extra,sheet,qs);
+  stage.innerHTML = papers!==null ? papers : paper(st,inner,extra,sheet,qs);
   fitTitles();
   fit();
   if(sheet!=="masu"){
@@ -3073,6 +3091,8 @@ function syncUI(){
   document.getElementById("g-eq").hidden     = !has("eq");
   document.getElementById("g-count").hidden  = isMasu;
   document.getElementById("g-lefty").hidden  = !isMasu;
+  [].forEach.call(document.querySelectorAll("#mside button"),function(b){
+    b.setAttribute("aria-pressed", b.dataset.v===st.mside ? "true":"false"); });
   document.getElementById("g-mkind").hidden  = !isMasu;
   document.getElementById("g-mzero").hidden  = !isMasu;
   document.getElementById("g-msize").hidden  = !isMasu;
@@ -3160,11 +3180,13 @@ function clean(){
   st.da = num(st.da,1,4,2); st.db = num(st.db,1,4,1);
   st.dp = num(st.dp,1,2,1); st.count = num(st.count,1,120,12);
   st.seed = num(st.seed,1,99999,1234);
-  ["paren","negparen","namerow","lefty","mzero","titleDirty","mixmode","countAuto"].forEach(function(k){
+  ["paren","negparen","namerow","mzero","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
   st.msize = Number(st.msize)===9 ? 9 : 10;
+  st.mside = pickOne(st.mside,["r","l","both"],"r");
+  delete st.lefty;
   st.pscale = pickOne(String(st.pscale),["1","0.9","0.8","0.7"],"0.8");
   st.title = typeof st.title==="string" ? st.title.slice(0,60) : "";
   /* 100マスは 整数だけの 紙。ぶんや・たんげんと 食いちがわない ように そろえる */
@@ -3176,12 +3198,14 @@ function load(){
     if(!raw) return;
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
-     "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty",
+     "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty","mside",
      "mkind","mzero","msize","pscale"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
-    /* 前の 形（チェックボックスの nocarry）で 保存された ものを 引きつぐ */
+    /* 前の 形で 保存された ものを 引きつぐ。
+       nocarry＝くり上がりの チェック、lefty＝左きき用の チェック。 */
     if(o.carry===undefined && o.nocarry===true) state.carry = "none";
+    if(o.mside===undefined && o.lefty!==undefined) state.mside = o.lefty ? "l" : "r";
     ["grades","cats","units","ops"].forEach(function(k){
       if(Array.isArray(o[k]) && o[k].length) state[k] = o[k];
     });
@@ -3195,7 +3219,6 @@ function applyToForm(){
   document.getElementById("dp").value = state.dp;
   document.getElementById("fd").value = state.fd;
   document.getElementById("paren").checked = state.paren;
-  document.getElementById("lefty").checked = state.lefty;
   document.getElementById("pscale").value = state.pscale;
   document.getElementById("negparen").checked = state.negparen;
   document.getElementById("eqform").value = state.eqform;
@@ -3274,6 +3297,10 @@ document.addEventListener("DOMContentLoaded", function(){
     var b = e.target.closest("button"); if(!b || b.disabled) return;
     state.mkind = b.dataset.v; state.titleDirty = false; update();
   });
+  document.getElementById("mside").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b || b.disabled) return;
+    state.mside = b.dataset.v; state.titleDirty = false; update();
+  });
   document.getElementById("msize").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b || b.disabled) return;
     state.msize = Number(b.dataset.v); state.titleDirty = false; update();
@@ -3339,7 +3366,6 @@ document.addEventListener("DOMContentLoaded", function(){
   bindCheck("paren","paren");
   bindCheck("negparen","negparen");
   bindCheck("namerow","namerow");
-  bindCheck("lefty","lefty");
   [].forEach.call(document.querySelectorAll('input[name="dm"]'),function(r){
     r.addEventListener("change",function(){ state.divmode = this.value; update(); });
   });
