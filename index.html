@@ -304,6 +304,12 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 /* 81マス（9×9）。ますを 大きく して、紙 いっぱいに 使う */
 .masu.n9 td,.masu.n9 th{width:17.6mm;height:20.9mm}
 .masu.n9 .corner{font-size:8.2mm}
+/* わり算（ますの 中に わられる数）。見出しの 行が ない ぶん 高く する */
+.masu.div td,.masu.div th{width:17.6mm;height:23.2mm}
+.masu.div th{font-size:6.6mm}
+.masu.div td{position:relative;text-align:left;vertical-align:top}
+.masu.div td .dd{display:block;padding:1.4mm 0 0 1.8mm;font-size:5.6mm;font-weight:700}
+.masu.div td .v{position:absolute;right:2.2mm;bottom:1.6mm}
 
 /* ---------- せまい画面 ---------- */
 @media (max-width:900px){
@@ -2259,13 +2265,15 @@ function makeSet(st){
   return out;
 }
 /* マス計算で できる 計算。題も 見出しも ここから 出すので、表と 食いちがわない。
-   わり算は 向きを「たて ÷ よこ」に きめて いる（ひき算の「たて − よこ」と 同じ）。
-   よこ（わる数）は 1〜N、たて（わられる数）は 10〜89。
-   どの たても どの よこでも わりきれる ように する ことは できない
-   （1〜9 ぜんぶで わりきれる 2けたの 数は ない）ので、あまりの ある
-   わり算に する。89 まで に して おくと、いちばん むずかしい ÷9 の れつは
-   こたえが 9 あまり 8 まで に おさまる（九九の はんい）。
-   小数と 正負の数の わり算は あまりの 意味が かわるので 整数だけ。 */
+   わり算は ぜんぶ わりきれる ように する。見出しを 2つとも わる数・
+   わられる数に すると、たての 数が よこの 1〜9 ぜんぶで わりきれないと
+   いけない（そんな 数は 2520 の 倍数 しか ない）。そこで わり算だけ
+   形を かえる。たての 見出しが わる数（÷1〜÷9）、ますの 中に
+   わられる数を 先に 書いて おき、子どもは 商を 書く。
+   わられる数は わる数 × 1〜9 なので かならず わりきれ、商は 1〜9。
+   商の ならびは ラテン方格（どの 行にも どの 列にも 1〜9 が 1回ずつ）に
+   して あるので、1まいで 九九の わり算 81こ が ちょうど 1回ずつ 出る。
+   小数と 正負の数の わり算は 出さない（整数だけ）。 */
 var MASUOPS = ["+","-","*","/"];
 function masuOp(ops){
   var i;
@@ -2321,6 +2329,17 @@ function makeMasu(st){
     var pool = [], k;
     for(k=lo;k<=hi;k++) if(z || k!==0) pool.push(k);
     return shuffle(pool).slice(0,N);
+  }
+  if(op==="/"){
+    /* 商 q(i,j) = Q[(k_i + p_j) mod 9]。Q・k・p は どれも ならびかえ なので、
+       どの 行（1つの わる数）にも どの 列にも 商 1〜9 が 1回ずつ 入る。 */
+    var divs = shuffle([1,2,3,4,5,6,7,8,9]);
+    var Q = shuffle([1,2,3,4,5,6,7,8,9]), kk = shuffle([0,1,2,3,4,5,6,7,8]),
+        pp = shuffle([0,1,2,3,4,5,6,7,8]);
+    var quots = divs.map(function(d,ri){
+      return pp.map(function(pj){ return Q[(kk[ri]+pj)%9]; }); });
+    return {op:"/", cols:[], rows:divs, quots:quots,
+            lefty:masuSides(st)[0]==="l", kind:"int"};
   }
   var cols, rows;
   if(kind==="dec"){
@@ -2459,6 +2478,19 @@ function masuHTML(m){
      左手で 書くと 手が ペンの 左を おおうので、左はしの 見出しが
      見えなく なる。数字も こたえも 変えず、置き場所だけ 変える。 */
   var lz = !!m.lefty, nc = m.cols.length, nr = m.rows.length, c, r;
+  if(m.quots){
+    /* わり算: たての 見出しが わる数、ますの 中に わられる数。商を 書く */
+    var hd = '<table class="masu div'+(lz?" lefty":"")+'"><tbody>';
+    for(r=0;r<nr;r++){
+      var dv = m.rows[r], sd = '<th>÷'+dv+'</th>', bd = '';
+      for(c=0;c<m.quots[r].length;c++){
+        var q = m.quots[r][c];
+        bd += '<td><span class="dd">'+(dv*q)+'</span><span class="v">'+q+'</span></td>';
+      }
+      hd += '<tr>' + (lz ? bd+sd : sd+bd) + '</tr>';
+    }
+    return hd+'</tbody></table>';
+  }
   var corner = '<th class="corner">'+OPSIGN[m.op]+'</th>';
   var head = '';
   for(c=0;c<nc;c++) head += '<th>'+mnum(m.cols[c])+'</th>';
@@ -2533,7 +2565,7 @@ function hint(st,qs){
     var mb = [masuLabel(st), opNameJa(mop)];
     /* 向きの ある 計算は、どちらから どちらを ひく／わるかを 紙に 書く */
     if(mop==="-") mb.push(T("たて − よこ","row − column"));
-    if(mop==="/") mb.push(T("たて ÷ よこ","row ÷ column"), T("あまりは 7…3 と 書く","remainder: 7…3"));
+    if(mop==="/") mb.push(T("ますの 数 ÷ たての 数","square ÷ row number"), T("商を 書く","write the quotient"));
     /* 「両方」の ときは 1まいずつ むきが ちがう ので、その 紙の 表を 見る */
     var lz = qs && qs.masu ? !!qs.masu.lefty : masuSides(st)[0]==="l";
     if(st.mkind==="dec") mb.push(T("小数","decimals"));
@@ -2645,6 +2677,13 @@ function sheetPayload(st,qs,sheet){
 /* マス計算の QR。マイナスの 「-」と 区切りの 「-」が ぶつかる ので、
    区切りを 「,」に して 版を 5に した。前に 刷った 紙（版2）も 読める。 */
 function masuPayload(st,m){
+  /* わり算（版6）: 6*No.*わる数 9けた*商 81けた[*L]。ぜんぶ 1〜9 なので 区切りなし */
+  if(m.quots){
+    var f6 = ["6", st.seed, m.rows.join(""),
+              m.quots.map(function(r){ return r.join(""); }).join("")];
+    if(m.lefty) f6.push("L");
+    return f6.join("*");
+  }
   var f = ["5", st.seed, OPC[m.op]||"m", m.cols.join(","), m.rows.join(",")];
   var flag = (m.lefty ? "L" : "");
   if(flag) f.push(flag);
@@ -2816,7 +2855,7 @@ function render(depth){
        見くらべながら 同じ 問題で 競える。 */
     papers = "";
     for(si=0; si<sides.length; si++){
-      mm = {op:m.op, cols:m.cols, rows:m.rows, kind:m.kind, lefty:sides[si]==="l"};
+      mm = {op:m.op, cols:m.cols, rows:m.rows, quots:m.quots, kind:m.kind, lefty:sides[si]==="l"};
       papers += paper(st, masuHTML(mm), extra, "masu", {masu:mm});
     }
     lastQs = null;                                 /* 1問ずつの 採点は しない */
@@ -3110,7 +3149,7 @@ function syncUI(){
     b.disabled = mdiv && b.dataset.v!=="int";
     b.setAttribute("aria-pressed", b.dataset.v===st.mkind ? "true":"false"); });
   /* えらんだ ものに 合わせて、表の 数の 目やすを 書きかえる */
-  document.getElementById("mk-int").textContent = mdiv ? "10〜89 ÷ 1〜9" : "1〜9";
+  document.getElementById("mk-int").textContent = mdiv ? "九九の わり算" : "1〜9";
   document.getElementById("mk-dec").textContent = "0.1〜9";
   document.getElementById("mk-neg").textContent = "−9〜9";
 

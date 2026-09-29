@@ -217,6 +217,7 @@ table.masu th,table.masu td{border:1px solid var(--line);padding:5px 7px;text-al
 table.masu th{background:var(--accent-soft);font-weight:600}
 table.masu tbody th{background:var(--accent-soft)}
 table.masu td{color:var(--accent);font-weight:600}
+table.masu td .dd{font-size:.72em;font-weight:400;color:var(--ink2);margin-right:4px}
 </style>
 </head>
 <body>
@@ -334,6 +335,17 @@ function decodeHash(){
     pay = g4.join("*");
   }
   var f = pay.split("*");
+  /* 版6: わり算。6*No.*わる数 9けた*商 81けた[*L]。ますの 中に わられる数 */
+  if(f[0]==="6" && f.length>=4){
+    var dv6 = f[2].split("").map(Number), q6 = f[3].split("").map(Number);
+    var okd = function(n){ return n>=1 && n<=9; };
+    if(!dv6.length || dv6.length>12 || !dv6.every(okd) ||
+       q6.length!==dv6.length*dv6.length || !q6.every(okd)) return null;
+    var quots6 = dv6.map(function(d,i){ return q6.slice(i*dv6.length,(i+1)*dv6.length); });
+    return {masu:{op:"/", cols:[], rows:dv6, quots:quots6, lefty:(f[4]||"").indexOf("L")>=0},
+            id:"q"+f[1], no:f[1], at:new Date().toISOString(),
+            title:q6.length+"マス計算（÷）", qs:[]};
+  }
   /* 版5 は 区切りが 「,」。マイナスや 小数が 入る。版2 は 前に 刷った 紙 */
   if((f[0]==="2" || f[0]==="5") && f.length>=5){
     var op = OPC[f[2]] || "*";
@@ -434,6 +446,17 @@ function masuTable(m){
   /* 左きき用の 紙は 見出しが 右がわ。こたえの 表も 同じ 向きに して、
      紙と マスを 見くらべられる ように する。 */
   var lz = !!m.lefty, dec = !!m.dec, r, c, x, y;
+  if(m.quots){
+    /* わり算（版6）: 紙と 同じく たてが わる数。ますには わられる数（小さく）と 商 */
+    var t6 = '<table class="masu"><tbody>';
+    for(r=0;r<m.rows.length;r++){
+      var sd = '<th>÷'+m.rows[r]+'</th>', bd = '';
+      for(c=0;c<m.quots[r].length;c++)
+        bd += '<td><span class="dd">'+(m.rows[r]*m.quots[r][c])+'</span>'+m.quots[r][c]+'</td>';
+      t6 += '<tr>'+(lz ? bd+sd : sd+bd)+'</tr>';
+    }
+    return t6+'</tbody></table>';
+  }
   var corner = '<th>'+esc(OPSIGN[m.op]||m.op)+'</th>', head = '';
   for(c=0;c<m.cols.length;c++) head += '<th>'+esc(masuFmt(m.cols[c],dec))+'</th>';
   var h = '<table class="masu"><thead><tr>'+(lz ? head+corner : corner+head)+'</tr></thead><tbody>';
@@ -462,9 +485,11 @@ function viewMark(){
        + '<p class="muted">'+esc(qrNote)+'</p></div>';
   }
   if(qrMasu){
-    var mn = qrMasu.cols.length * qrMasu.rows.length;
+    var mn = qrMasu.quots ? qrMasu.rows.length*qrMasu.quots[0].length
+                          : qrMasu.cols.length * qrMasu.rows.length;
     return h + '<div class="card"><h2>'+mn+'マス計算の こたえ</h2>'
-      + (qrMasu.op==="/" ? '<p class="muted">たて ÷ よこ。「7…3」は 7 あまり 3。</p>' : '')
+      + (qrMasu.quots ? '<p class="muted">ますの 数 ÷ たての 数。小さい 数字が わられる数、大きい 数字が 商（こたえ）。</p>'
+         : qrMasu.op==="/" ? '<p class="muted">たて ÷ よこ。「7…3」は 7 あまり 3。</p>' : '')
       + '<div class="masuwrap">'+masuTable(qrMasu)+'</div>'
       + '<p class="muted">'+mn+'マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
   }
