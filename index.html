@@ -2168,7 +2168,7 @@ var state = {
   grades:[4], cats:["calc","fig","word"], units:["int"], lang:"ja",
   type:"hissan", ops:["/"], da:3, db:2, carry:"any", divmode:"rem",
   dp:1, fd:"diff", paren:true, negparen:true, eqform:"any",
-  count:12, cols:"auto", mixmode:false, countAuto:true,
+  count:12, cols:"auto", mixmode:false, countAuto:false, tmin:3,
   title:"", titleDirty:false, namerow:true, mside:"r", mkind:"int", pscale:0.8, carry:"any",
   seed:Math.floor(Math.random()*9000)+1000
 };
@@ -2595,6 +2595,7 @@ function hint(st,qs){
     var names = c.map(function(u){ return unitName(u); });
     bits.push(names.slice(0,4).join(T("・",", ")) + (names.length>4 ? T(" ほか"," and more") : ""));
   }
+  if(st.tmin) bits.push(T("目やす "+st.tmin+"分","about "+st.tmin+" min"));
   return bits.join(T("　/　"," / "));
 }
 /* ------------------------------------------------------------------
@@ -2787,6 +2788,7 @@ function paper(st,inner,extraField,sheet,qs){
       + '<span class="fl nm"><i>'+T("名まえ","Name")+'</i><u></u></span>'
       + '<span class="fl dt"><i>'+T("日づけ","Date")+'</i><u></u></span>'
       + '<span class="fl dt"><i>'+(extraField||T("点数","Score"))+'</i><u></u></span>'
+      + (st.tmin && sheet!=="masu" ? '<span class="fl dt"><i>'+T("タイム","Time")+'</i><u></u></span>' : '')
       + '</div>';
   }
   /* QR は 右上。こたえの ぶんだけ 下の 余白が 空くので、問題が 1〜2行 増える。
@@ -2860,6 +2862,7 @@ function render(depth){
     }
     lastQs = null;                                 /* 1問ずつの 採点は しない */
   } else {
+    if(st.tmin && !depth){ st.count = timeCount(st); fillCount(st.count); }
     qs = makeSet(st);
     short = qs.length < st.count;
     for(var i=0;i<qs.length;i++) if(qs[i].kind!=="calc"){ sheet = "block"; break; }
@@ -2868,6 +2871,11 @@ function render(depth){
     }
     cols = autoCols(st,qs,sheet);
     if(colCap && cols > colCap) cols = colCap;
+    /* 時間で きめた ときは 行の きりの いい 数に そろえる（さいごの 行に 1問だけ、を なくす） */
+    if(st.tmin && !short && cols > 1 && qs.length > cols && qs.length % cols){
+      qs = qs.slice(0, qs.length - qs.length % cols);
+      st.count = qs.length; fillCount(st.count);
+    }
     lastQs = qs;
     inner = sheet==="hissan" ? hissanHTML(qs,cols)
           : sheet==="block"  ? blockHTML(qs,cols) : yokoHTML(qs,cols);
@@ -2912,7 +2920,9 @@ function render(depth){
     }
   }
   if(trimmed && !short && !st.countAuto){
-    w.textContent = "1まいに おさまる数に あわせて " + st.count + "問 に しました。";
+    w.textContent = st.tmin
+      ? st.tmin+"分ぶんは 1まいに 入りきらないので、入る " + st.count + "問 に しました。"
+      : "1まいに おさまる数に あわせて " + st.count + "問 に しました。";
     w.hidden = false;
   } else if(short){
     w.textContent = "この じょうけんでは 作れる問題が たりないので、数を へらして 出しました。";
@@ -3022,6 +3032,47 @@ function fit(){
 /* ==========================================================
    そうさ
    ========================================================== */
+/* ---------- 時間で 問題数を きめる ----------
+   毎日 つづける には、1まいが 短い ほうが いい。「3分ぶん」を えらぶと、
+   1問ずつ かかる 時間を 見つもって、合計が 3分に なる ところで 止める。
+   見つもりは 目やす（秒）。九九 1問 ≒ 1.5〜3秒（81マスを 2分で とく 子）を
+   もとに、けた数・くり上がり・ひっ算の 手間で ふやす。
+   ずれて いたら ここの 数を なおす。README に 表が ある。 */
+var TMINS = [3,5,10];
+function secOf(q){
+  if(q.kind==="word") return q.shiki ? 60 : 45;                 /* 読む＋式＋こたえ */
+  if(q.kind==="fig")  return 40;
+  var h = q.h, uid = q.unit && q.unit.id;
+  if(h && (uid==="int" || uid==="dec")){
+    var a = String(h.sa).replace(/\D/g,"").length, b = String(h.sb).replace(/\D/g,"").length;
+    var dot = uid==="dec" ? 4 : 0;                                /* 小数点を そろえる 手間 */
+    if(h.op==="+" || h.op==="-")
+      return 3 + 2.5*Math.max(a,b) + (q.sub && q.sub.indexOf("c")>=0 ? 2 : 0) + dot;
+    if(h.op==="*")
+      return 2 + 3*a*b + (b>1 ? 5*b : 0) + dot;                   /* 部分積を たす 手間 */
+    if(h.op==="/"){
+      var qd = String(h.sans).replace(/\D/g,"").length || 1;
+      return 3 + 6*qd*b + (h.rem ? 2 : 0) + dot;                  /* 商 1けたごとに 見つもる・かける・ひく */
+    }
+  }
+  if(uid==="frac") return q.sub && q.sub.indexOf("t")>=0 ? 30 : 15;   /* 通分 あり／なし */
+  if(uid==="mixed" || uid==="eq") return 35;
+  return 15;                                                      /* その ほかの 計算 */
+}
+/* 時間の わくに 入る 問題数。多めに 作って 前から 足して いき、
+   わくを こえる 手前で 止める（2問は かならず 出す）。 */
+function timeCount(st){
+  var keep = st.count;
+  st.count = 60;
+  var qs = makeSet(st), lim = st.tmin*60, t = 0, n = 0, i;
+  st.count = keep;
+  for(i=0;i<qs.length;i++){
+    var s = secOf(qs[i]);
+    if(n>=2 && t+s > lim) break;
+    t += s; n++;
+  }
+  return Math.max(2, n);
+}
 function countOptions(){
   var k = sheetKind();
   return k==="hissan" ? [3,6,9,12,15,18,21,24]
@@ -3047,9 +3098,14 @@ function fillCount(exact){
   state.count = best;
   /* 「おまかせ」＝ 用紙が うまる 数に 自動で 合わせる。
      いま 何問に なったかも 見えるように しておく。 */
-  var auto = '<option value="auto"'+(state.countAuto?" selected":"")+'>おまかせ（'+best+'問）</option>';
-  sel.innerHTML = auto + opts.map(function(n){
-    return '<option value="'+n+'"'+(!state.countAuto && n===best ? " selected":"")+'>'+n+'問</option>';
+  var tm = TMINS.map(function(m){
+    return '<option value="t'+m+'"'+(state.tmin===m?" selected":"")+'>'+m+'分ぶん'
+      + (state.tmin===m ? '（'+best+'問）' : '')+'</option>';
+  }).join("");
+  var auto = '<option value="auto"'+(state.countAuto&&!state.tmin?" selected":"")+'>用紙いっぱい'
+    + (state.countAuto&&!state.tmin ? '（'+best+'問）' : '')+'</option>';
+  sel.innerHTML = tm + auto + opts.map(function(n){
+    return '<option value="'+n+'"'+(!state.countAuto && !state.tmin && n===best ? " selected":"")+'>'+n+'問</option>';
   }).join("");
 }
 function fillGrades(){
@@ -3227,6 +3283,8 @@ function clean(){
   ["paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
+  st.tmin = TMINS.indexOf(Number(st.tmin))>=0 ? Number(st.tmin) : 0;
+  if(st.tmin) st.countAuto = false;
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
   delete st.msize;                       /* 前の 形（マス計算・81マスの えらび） */
   delete st.mzero;                       /* 前の 形（0あり・0なしの えらび） */
@@ -3243,7 +3301,7 @@ function load(){
     if(!raw) return;
     var o = JSON.parse(raw);
     ["lang","type","da","db","carry","divmode","dp","fd","paren","negparen","eqform",
-     "count","cols","mixmode","countAuto","title","titleDirty","namerow","lefty","mside",
+     "count","cols","mixmode","countAuto","tmin","title","titleDirty","namerow","lefty","mside",
      "mkind","pscale"].forEach(function(k){
       if(o[k]!==undefined) state[k] = o[k];
     });
@@ -3251,6 +3309,9 @@ function load(){
        nocarry＝くり上がりの チェック、lefty＝左きき用の チェック。 */
     if(o.carry===undefined && o.nocarry===true) state.carry = "none";
     if(o.mside===undefined && o.lefty!==undefined) state.mside = o.lefty ? "l" : "r";
+    /* 時間の えらびが なかった ころの 保存。「おまかせ（用紙いっぱい）」だった 人は
+       3分ぶん に する（毎日 つづけやすい 長さ）。数を 自分で えらんで いた 人は そのまま。 */
+    if(o.tmin===undefined){ state.tmin = o.countAuto===false ? 0 : 3; if(state.tmin) state.countAuto = false; }
     ["grades","cats","units","ops"].forEach(function(k){
       if(Array.isArray(o[k]) && o[k].length) state[k] = o[k];
     });
@@ -3314,7 +3375,7 @@ function fromURL(){
     var o = p.get("o"), map = {a:"+", s:"-", m:"*", d:"/"}, ops = [];
     if(o) String(o).split("").forEach(function(c){ if(map[c]) ops.push(map[c]); });
     if(ops.length) state.ops = ops;
-    var n = Number(p.get("n"));  if(n>=4 && n<=60) { state.count = n; state.countAuto = false; }
+    var n = Number(p.get("n"));  if(n>=4 && n<=60) { state.count = n; state.countAuto = false; state.tmin = 0; }
     var da = Number(p.get("da")); if(da>=1 && da<=4) state.da = da;
     var db = Number(p.get("db")); if(db>=1 && db<=4) state.db = db;
     var dm = p.get("dm"); if(dm==="rem" || dm==="exact") state.divmode = dm;
@@ -3407,9 +3468,14 @@ document.addEventListener("DOMContentLoaded", function(){
     r.addEventListener("change",function(){ state.divmode = this.value; update(); });
   });
   document.getElementById("count").addEventListener("change",function(){
-    if(this.value === "auto"){
+    if(this.value.charAt(0) === "t"){
+      state.tmin = Number(this.value.slice(1));     /* 時間で 決める */
+      state.countAuto = false;
+    } else if(this.value === "auto"){
+      state.tmin = 0;
       state.countAuto = true;                      /* 用紙に 合わせて 自動で 決める */
     } else {
+      state.tmin = 0;
       state.count = Number(this.value);
       state.countAuto = false;                     /* 自分で えらんだ 数は そのまま つかう */
     }
