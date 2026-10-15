@@ -3038,7 +3038,8 @@ function fit(){
    見つもりは 目やす（秒）。九九 1問 ≒ 1.5〜3秒（81マスを 2分で とく 子）を
    もとに、けた数・くり上がり・ひっ算の 手間で ふやす。
    ずれて いたら ここの 数を なおす。README に 表が ある。 */
-var TMINS = [3,5,10];
+/* 5分・10分 は おかない。長く したい ときは 3分の 紙を 2まい・3まい する。 */
+var TMINS = [3];
 function secOf(q){
   if(q.kind==="word") return q.shiki ? 60 : 45;                 /* 読む＋式＋こたえ */
   if(q.kind==="fig")  return 40;
@@ -3283,7 +3284,8 @@ function clean(){
   ["paren","negparen","namerow","titleDirty","mixmode","countAuto"].forEach(function(k){
     st[k] = !!st[k];
   });
-  st.tmin = TMINS.indexOf(Number(st.tmin))>=0 ? Number(st.tmin) : 0;
+  /* 前に 5分・10分 を えらんで いた 保存は 3分に する */
+  st.tmin = Number(st.tmin) > 0 ? 3 : 0;
   if(st.tmin) st.countAuto = false;
   st.mkind = pickOne(st.mkind,["int","dec","neg"],"int");
   delete st.msize;                       /* 前の 形（マス計算・81マスの えらび） */
