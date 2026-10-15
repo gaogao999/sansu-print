@@ -2934,7 +2934,6 @@ function render(depth){
 function layoutSheets(sheet,cols){
   var papers = document.querySelectorAll(".paper"), capacity = 0, room = Infinity;
   var freeLeft = Infinity, unitH = 0, wide = false;
-  var capPx = (sheet==="hissan" ? 12 : sheet==="block" ? 14 : 20) * MM;
   for(var p=0;p<papers.length;p++){
     var body = papers[p].querySelector(".body");
     var grid = body.firstElementChild;
@@ -2973,9 +2972,13 @@ function layoutSheets(sheet,cols){
     room = Math.min(room, Math.floor((left + gap)/(ih + gap)) * cols);
     freeLeft = Math.min(freeLeft, left);
     unitH = Math.max(unitH, (ihMin===Infinity ? ih : ihMin) + gap);
+    /* 上から つめて ならべる（まん中に 寄せない）。あまった 高さは 行の
+       数で わけて、どの 問題の 下にも 同じ だけ 空きを つくる
+       （さいごの 問題の 下にも 書く 場所が のこる）。問題が 少ない ほど
+       1問あたりの 空きが ひろく なる。 */
     grid.style.height = "100%";
-    grid.style.alignContent = "center";
-    grid.style.rowGap = (rows>1 ? Math.min(gap + left/(rows-1), capPx) : gap) + "px";
+    grid.style.alignContent = "start";
+    grid.style.rowGap = (gap + left/rows) + "px";
   }
   return {cap:capacity, room: room===Infinity ? 0 : Math.max(0,room),
           left: freeLeft===Infinity ? 0 : Math.max(0,freeLeft), unitH:unitH, wide:wide};
