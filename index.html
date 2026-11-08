@@ -305,8 +305,9 @@ label.c span small{display:block;font-size:11px;color:var(--ink2);line-height:1.
 .masu.n9 td,.masu.n9 th{width:17.6mm;height:20.9mm}
 .masu.n9 .corner{font-size:8.2mm}
 /* わり算（ますの 中に わられる数）。見出しの 行が ない ぶん 高く する */
-.masu.div td,.masu.div th{width:17.6mm;height:23.2mm}
-.masu.div th{font-size:6.6mm}
+/* 上の 見出し 1行＋ます 9行。9列で 紙の はばを つかう */
+.masu.div td,.masu.div th{width:19.6mm;height:21.5mm}
+.masu.div thead th{height:15mm;font-size:6.6mm}
 .masu.div td{position:relative;text-align:left;vertical-align:top}
 .masu.div td .dd{display:block;padding:1.4mm 0 0 1.8mm;font-size:5.6mm;font-weight:700}
 .masu.div td .v{position:absolute;right:2.2mm;bottom:1.6mm}
@@ -2294,6 +2295,8 @@ function masuSize(st){ return 9; }
    2まい 出す。数も こたえも 同じで、見出しの 置き場所だけ ちがう。
    QR は 1まいずつ 別に つくる（読んだ 先の 表も 同じ むきに なる）。 */
 function masuSides(st){
+  /* わり算は わる数が 上の 見出し。手で かくれない ので むきは 1つだけ */
+  if(st && masuOp(st.ops)==="/") return ["r"];
   var v = st && st.mside;
   return v==="both" ? ["r","l"] : (v==="l" ? ["l"] : ["r"]);
 }
@@ -2331,15 +2334,15 @@ function makeMasu(st){
     return shuffle(pool).slice(0,N);
   }
   if(op==="/"){
-    /* 商 q(i,j) = Q[(k_i + p_j) mod 9]。Q・k・p は どれも ならびかえ なので、
-       どの 行（1つの わる数）にも どの 列にも 商 1〜9 が 1回ずつ 入る。 */
+    /* わる数は 上の 見出し（列ごと）。商 q(i,j) = Q[(k_i + p_j) mod 9]。
+       Q・k・p は どれも ならびかえ なので、どの 列（1つの わる数）にも
+       どの 行にも 商 1〜9 が 1回ずつ 入る。 */
     var divs = shuffle([1,2,3,4,5,6,7,8,9]);
     var Q = shuffle([1,2,3,4,5,6,7,8,9]), kk = shuffle([0,1,2,3,4,5,6,7,8]),
         pp = shuffle([0,1,2,3,4,5,6,7,8]);
-    var quots = divs.map(function(d,ri){
+    var quots = [0,1,2,3,4,5,6,7,8].map(function(ri){
       return pp.map(function(pj){ return Q[(kk[ri]+pj)%9]; }); });
-    return {op:"/", cols:[], rows:divs, quots:quots,
-            lefty:masuSides(st)[0]==="l", kind:"int"};
+    return {op:"/", top:true, cols:divs, rows:[], quots:quots, lefty:false, kind:"int"};
   }
   var cols, rows;
   if(kind==="dec"){
@@ -2479,15 +2482,18 @@ function masuHTML(m){
      見えなく なる。数字も こたえも 変えず、置き場所だけ 変える。 */
   var lz = !!m.lefty, nc = m.cols.length, nr = m.rows.length, c, r;
   if(m.quots){
-    /* わり算: たての 見出しが わる数、ますの 中に わられる数。商を 書く */
-    var hd = '<table class="masu div'+(lz?" lefty":"")+'"><tbody>';
-    for(r=0;r<nr;r++){
-      var dv = m.rows[r], sd = '<th>÷'+dv+'</th>', bd = '';
-      for(c=0;c<m.quots[r].length;c++){
+    /* わり算: 上の 見出しが わる数、ますの 中に わられる数。商を 書く。
+       見出しが 上に あるので、どちらの 手で 書いても かくれない。 */
+    var hd = '<table class="masu div"><thead><tr>';
+    for(c=0;c<nc;c++) hd += '<th>÷'+m.cols[c]+'</th>';
+    hd += '</tr></thead><tbody>';
+    for(r=0;r<m.quots.length;r++){
+      hd += '<tr>';
+      for(c=0;c<nc;c++){
         var q = m.quots[r][c];
-        bd += '<td><span class="dd">'+(dv*q)+'</span><span class="v">'+q+'</span></td>';
+        hd += '<td><span class="dd">'+(m.cols[c]*q)+'</span><span class="v">'+q+'</span></td>';
       }
-      hd += '<tr>' + (lz ? bd+sd : sd+bd) + '</tr>';
+      hd += '</tr>';
     }
     return hd+'</tbody></table>';
   }
@@ -2565,7 +2571,7 @@ function hint(st,qs){
     var mb = [masuLabel(st), opNameJa(mop)];
     /* 向きの ある 計算は、どちらから どちらを ひく／わるかを 紙に 書く */
     if(mop==="-") mb.push(T("たて − よこ","row − column"));
-    if(mop==="/") mb.push(T("ますの 数 ÷ たての 数","square ÷ row number"), T("商を 書く","write the quotient"));
+    if(mop==="/") mb.push(T("ますの 数 ÷ 上の 数","square ÷ top number"), T("商を 書く","write the quotient"));
     /* 「両方」の ときは 1まいずつ むきが ちがう ので、その 紙の 表を 見る */
     var lz = qs && qs.masu ? !!qs.masu.lefty : masuSides(st)[0]==="l";
     if(st.mkind==="dec") mb.push(T("小数","decimals"));
@@ -2678,12 +2684,11 @@ function sheetPayload(st,qs,sheet){
 /* マス計算の QR。マイナスの 「-」と 区切りの 「-」が ぶつかる ので、
    区切りを 「,」に して 版を 5に した。前に 刷った 紙（版2）も 読める。 */
 function masuPayload(st,m){
-  /* わり算（版6）: 6*No.*わる数 9けた*商 81けた[*L]。ぜんぶ 1〜9 なので 区切りなし */
+  /* わり算（版7）: 7*No.*上の わる数 9けた*商 81けた（行ごと）。ぜんぶ 1〜9 なので
+     区切りなし。版6 は わる数が たての 見出しだった ころの 紙（さいてん側は 両方 読む）。 */
   if(m.quots){
-    var f6 = ["6", st.seed, m.rows.join(""),
-              m.quots.map(function(r){ return r.join(""); }).join("")];
-    if(m.lefty) f6.push("L");
-    return f6.join("*");
+    return ["7", st.seed, m.cols.join(""),
+            m.quots.map(function(r){ return r.join(""); }).join("")].join("*");
   }
   var f = ["5", st.seed, OPC[m.op]||"m", m.cols.join(","), m.rows.join(",")];
   var flag = (m.lefty ? "L" : "");
@@ -2857,7 +2862,7 @@ function render(depth){
        見くらべながら 同じ 問題で 競える。 */
     papers = "";
     for(si=0; si<sides.length; si++){
-      mm = {op:m.op, cols:m.cols, rows:m.rows, quots:m.quots, kind:m.kind, lefty:sides[si]==="l"};
+      mm = {op:m.op, top:m.top, cols:m.cols, rows:m.rows, quots:m.quots, kind:m.kind, lefty:sides[si]==="l"};
       papers += paper(st, masuHTML(mm), extra, "masu", {masu:mm});
     }
     lastQs = null;                                 /* 1問ずつの 採点は しない */
@@ -3198,7 +3203,8 @@ function syncUI(){
   document.getElementById("g-neg").hidden    = !has("neg");
   document.getElementById("g-eq").hidden     = !has("eq");
   document.getElementById("g-count").hidden  = isMasu;
-  document.getElementById("g-lefty").hidden  = !isMasu;
+  /* わり算は 見出しが 上なので むきの えらびは いらない */
+  document.getElementById("g-lefty").hidden  = !isMasu || masuOp(st.ops)==="/";
   [].forEach.call(document.querySelectorAll("#mside button"),function(b){
     b.setAttribute("aria-pressed", b.dataset.v===st.mside ? "true":"false"); });
   document.getElementById("g-mkind").hidden  = !isMasu;

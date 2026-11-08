@@ -336,6 +336,18 @@ function decodeHash(){
   }
   var f = pay.split("*");
   /* 版6: わり算。6*No.*わる数 9けた*商 81けた[*L]。ますの 中に わられる数 */
+  /* 版7: わり算。7*No.*上の わる数 9けた*商 81けた（行ごと）。わる数は 上の 見出し */
+  if(f[0]==="7" && f.length>=4){
+    var dv7 = f[2].split("").map(Number), q7 = f[3].split("").map(Number);
+    var ok7 = function(n){ return n>=1 && n<=9; };
+    if(!dv7.length || dv7.length>12 || !dv7.every(ok7) || !q7.length ||
+       q7.length % dv7.length || q7.length/dv7.length>12 || !q7.every(ok7)) return null;
+    var quots7 = [];
+    for(var r7=0; r7<q7.length/dv7.length; r7++) quots7.push(q7.slice(r7*dv7.length,(r7+1)*dv7.length));
+    return {masu:{op:"/", top:true, cols:dv7, rows:[], quots:quots7},
+            id:"q"+f[1], no:f[1], at:new Date().toISOString(),
+            title:q7.length+"マス計算（÷）", qs:[]};
+  }
   if(f[0]==="6" && f.length>=4){
     var dv6 = f[2].split("").map(Number), q6 = f[3].split("").map(Number);
     var okd = function(n){ return n>=1 && n<=9; };
@@ -446,6 +458,19 @@ function masuTable(m){
   /* 左きき用の 紙は 見出しが 右がわ。こたえの 表も 同じ 向きに して、
      紙と マスを 見くらべられる ように する。 */
   var lz = !!m.lefty, dec = !!m.dec, r, c, x, y;
+  if(m.quots && m.top){
+    /* わり算（版7）: 紙と 同じく 上が わる数。ますには わられる数（小さく）と 商 */
+    var t7 = '<table class="masu"><thead><tr>';
+    for(c=0;c<m.cols.length;c++) t7 += '<th>÷'+m.cols[c]+'</th>';
+    t7 += '</tr></thead><tbody>';
+    for(r=0;r<m.quots.length;r++){
+      t7 += '<tr>';
+      for(c=0;c<m.cols.length;c++)
+        t7 += '<td><span class="dd">'+(m.cols[c]*m.quots[r][c])+'</span>'+m.quots[r][c]+'</td>';
+      t7 += '</tr>';
+    }
+    return t7+'</tbody></table>';
+  }
   if(m.quots){
     /* わり算（版6）: 紙と 同じく たてが わる数。ますには わられる数（小さく）と 商 */
     var t6 = '<table class="masu"><tbody>';
@@ -485,10 +510,10 @@ function viewMark(){
        + '<p class="muted">'+esc(qrNote)+'</p></div>';
   }
   if(qrMasu){
-    var mn = qrMasu.quots ? qrMasu.rows.length*qrMasu.quots[0].length
+    var mn = qrMasu.quots ? qrMasu.quots.length*qrMasu.quots[0].length
                           : qrMasu.cols.length * qrMasu.rows.length;
     return h + '<div class="card"><h2>'+mn+'マス計算の こたえ</h2>'
-      + (qrMasu.quots ? '<p class="muted">ますの 数 ÷ たての 数。小さい 数字が わられる数、大きい 数字が 商（こたえ）。</p>'
+      + (qrMasu.quots ? '<p class="muted">ますの 数 ÷ '+(qrMasu.top?'上':'たて')+'の 数。小さい 数字が わられる数、大きい 数字が 商（こたえ）。</p>'
          : qrMasu.op==="/" ? '<p class="muted">たて ÷ よこ。「7…3」は 7 あまり 3。</p>' : '')
       + '<div class="masuwrap">'+masuTable(qrMasu)+'</div>'
       + '<p class="muted">'+mn+'マスは 1問ずつの 記録は しません。タイムと できた数を 見て ください。</p></div>';
